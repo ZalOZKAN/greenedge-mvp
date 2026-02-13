@@ -1,0 +1,24 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: edge-echo
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: edge-echo
+  template:
+    metadata:
+      labels:
+        app: edge-echo
+    spec:
+      nodeSelector:
+        edge: edge-a
+      containers:
+      - name: echo
+        image: hashicorp/http-echo:0.2.3
+        args:
+          - "-text=Hello from GreenEdge MVP"
+          - "-listen=:5678"
+        ports:
+          - containerPort: 5678
