@@ -1,0 +1,34 @@
+{
+  "greedy_min_latency": {
+    "avg_reward": -18.0597,
+    "std_reward": 1.9809,
+    "avg_latency": 98.35,
+    "p95_latency": 121.59,
+    "avg_energy_per_mbps": 0.728,
+    "sla_violation_rate": 0.0579
+  },
+  "greedy_min_energy": {
+    "avg_reward": -20.6119,
+    "std_reward": 1.7497,
+    "avg_latency": 111.37,
+    "p95_latency": 178.02,
+    "avg_energy_per_mbps": 0.7023,
+    "sla_violation_rate": 0.2403
+  },
+  "simple_threshold": {
+    "avg_reward": -18.5975,
+    "std_reward": 1.6351,
+    "avg_latency": 100.63,
+    "p95_latency": 130.44,
+    "avg_energy_per_mbps": 0.7085,
+    "sla_violation_rate": 0.1256
+  },
+  "rl_ppo": {
+    "avg_reward": -17.4108,
+    "std_reward": 1.6413,
+    "avg_latency": 95.15,
+    "p95_latency": 107.97,
+    "avg_energy_per_mbps": 0.7403,
+    "sla_violation_rate": 0.0018
+  }
+}
