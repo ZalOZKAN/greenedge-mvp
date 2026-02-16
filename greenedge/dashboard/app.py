@@ -31,10 +31,10 @@ from greenedge.simulator.env import ACTION_LABELS, GreenEdgeEnv
 # POLICY_MAP — Tek kaynak, her yerde bu kullanılacak
 # ---------------------------------------------------------------------------
 POLICY_MAP = {
-    "rl_ppo": {"tr": "YZ", "en": "AI"},
+    "rl_ppo": {"tr": "PPO", "en": "PPO"},
     "greedy_min_latency": {"tr": "Hız", "en": "Speed"},
     "greedy_min_energy": {"tr": "Maliyet", "en": "Cost"},
-    "simple_threshold": {"tr": "CPU", "en": "CPU"},
+    "simple_threshold": {"tr": "Yük", "en": "Load"},
 }
 
 # Internal key list (order matters for colors)
@@ -54,8 +54,8 @@ TEXTS = {
         "lang_label": "Dil / Language",
         "eval_header": "Değerlendirme Özeti",
         "eval_info_title": "Açıklama",
-        "eval_info_content": "Yapay zeka modelimizin 200 test senaryosu üzerindeki performansı. Amaç: en düşük gecikme ve en az enerji tüketimi ile iş yüklerini yönlendirmek, SLA ihlallerini sıfıra yakın tutmak.",
-        "terms_explain": "**Terimler:** **YZ** = Yapay Zeka (Pekiştirmeli Öğrenme modeli) · **P95** = 100 istekten 95'inin bu sürede tamamlandığı gecikme · **SLA** = Hizmet Seviyesi Anlaşması (maks. 120 ms).",
+        "eval_info_content": "PPO (Proximal Policy Optimization) modelimizin 200 test senaryosu üzerindeki performansı. Amaç: en düşük gecikme ve en az enerji tüketimi ile iş yüklerini yönlendirmek, SLA ihlallerini sıfıra yakın tutmak.",
+        "terms_explain": "**Terimler:** **PPO** = Proximal Policy Optimization (Pekiştirmeli Öğrenme modeli) · **Yük** = CPU yoğunluğuna dayalı basit kural · **P95** = 100 istekten 95'inin bu sürede tamamlandığı gecikme · **SLA** = Hizmet Seviyesi Anlaşması (maks. 120 ms).",
         "avg_latency": "Ort. Gecikme",
         "p95_latency": "P95 Gecikme",
         "energy_mbps": "Enerji/Mbps",
@@ -126,6 +126,7 @@ TEXTS = {
         "ab_metric_energy": "Enerji",
         "ab_metric_sla": "SLA",
         "ab_better": "↓ daha iyi",
+        "story_panel": "Bu ekran, <strong>gecikme (latency)</strong> ile <strong>enerji tüketimi</strong> arasındaki dengeyi gösterir. 5G kenar sunucuları düşük gecikme sağlarken yüksek enerji harcayabilir; bulut ucuzdur ama yavaştır. <strong>PPO politikası</strong>, pekiştirmeli öğrenme ile bu iki hedefi aynı anda optimize eder — SLA ihlallerini sıfıra yakın tutarken enerji verimliliğini korur.",
     },
     "en": {
         "page_title": "GreenEdge-5G Dashboard",
@@ -136,8 +137,8 @@ TEXTS = {
         "lang_label": "Dil / Language",
         "eval_header": "Evaluation Summary",
         "eval_info_title": "Info",
-        "eval_info_content": "AI model performance across 200 test scenarios. Goal: route workloads with lowest latency and minimal energy, keeping SLA violations near zero.",
-        "terms_explain": "**Terms:** **AI** = Artificial Intelligence (Reinforcement Learning model) · **P95** = 95th percentile latency (95% of requests complete within this time) · **SLA** = Service Level Agreement (max 120 ms).",
+        "eval_info_content": "PPO (Proximal Policy Optimization) model performance across 200 test scenarios. Goal: route workloads with lowest latency and minimal energy, keeping SLA violations near zero.",
+        "terms_explain": "**Terms:** **PPO** = Proximal Policy Optimization (Reinforcement Learning agent) · **Load** = simple CPU-threshold heuristic · **P95** = 95th percentile latency (95% of requests complete within this time) · **SLA** = Service Level Agreement (max 120 ms).",
         "avg_latency": "Avg Latency",
         "p95_latency": "P95 Latency",
         "energy_mbps": "Energy/Mbps",
@@ -208,6 +209,7 @@ TEXTS = {
         "ab_metric_energy": "Energy",
         "ab_metric_sla": "SLA",
         "ab_better": "↓ better",
+        "story_panel": "This screen shows the trade-off between <strong>latency</strong> and <strong>energy consumption</strong>. 5G edge servers offer low latency but consume more energy; cloud is cheaper but slower. The <strong>PPO policy</strong> uses reinforcement learning to optimize both goals simultaneously — keeping SLA violations near zero while preserving energy efficiency.",
     },
 }
 
@@ -300,13 +302,28 @@ def _rl_predict(obs: np.ndarray) -> int:
 # ---------------------------------------------------------------------------
 # PDF Generation
 # ---------------------------------------------------------------------------
+def _git_commit_hash() -> str:
+    """Return short git commit hash or 'N/A'."""
+    import subprocess
+    try:
+        out = subprocess.check_output(
+            ["git", "rev-parse", "--short", "HEAD"],
+            cwd=str(REPO_ROOT), stderr=subprocess.DEVNULL, text=True,
+        )
+        return out.strip()
+    except Exception:
+        return "N/A"
+
+
 def generate_pdf(results: Dict, lang: str) -> bytes:
-    """Generate PDF report using ReportLab."""
+    """Generate PDF report using ReportLab — includes tables, charts, config."""
     from reportlab.lib import colors
     from reportlab.lib.pagesizes import A4
     from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
     from reportlab.lib.units import cm
-    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+    from reportlab.platypus import (
+        SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image,
+    )
     
     T = TEXTS[lang]
     buffer = io.BytesIO()
@@ -317,14 +334,38 @@ def generate_pdf(results: Dict, lang: str) -> bytes:
     title_style = ParagraphStyle('CustomTitle', parent=styles['Heading1'], fontSize=24, spaceAfter=20, textColor=colors.HexColor("#0d6efd"))
     h2_style = ParagraphStyle('CustomH2', parent=styles['Heading2'], fontSize=16, spaceBefore=20, spaceAfter=10, textColor=colors.HexColor("#212529"))
     body_style = ParagraphStyle('CustomBody', parent=styles['Normal'], fontSize=12, spaceAfter=8)
+    small_style = ParagraphStyle('SmallText', parent=styles['Normal'], fontSize=9, textColor=colors.HexColor("#6c757d"), spaceAfter=4)
     
     story = []
     
     # Title
     story.append(Paragraph(T["pdf_title"], title_style))
     story.append(Paragraph(f"{T['pdf_generated']}: {datetime.now().strftime('%Y-%m-%d %H:%M')}", body_style))
+    story.append(Paragraph(f"Git commit: {_git_commit_hash()}", small_style))
     story.append(Paragraph(f"{T['pdf_scenarios']}: 200", body_style))
-    story.append(Spacer(1, 20))
+    story.append(Spacer(1, 12))
+    
+    # Environment config summary
+    cfg = EnvConfig()
+    config_lbl = "Ortam Yapılandırması" if lang == "tr" else "Environment Config"
+    story.append(Paragraph(config_lbl, h2_style))
+    cfg_data = [
+        ["episode_length", str(cfg.episode_length)],
+        ["sla_ms", f"{cfg.sla_ms} ms"],
+        ["reward α (energy)", str(cfg.reward.alpha)],
+        ["reward β (latency)", str(cfg.reward.beta)],
+        ["reward γ (SLA)", str(cfg.reward.gamma)],
+    ]
+    cfg_table = Table(cfg_data, colWidths=[8*cm, 6*cm])
+    cfg_table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (0, -1), colors.HexColor("#f8f9fa")),
+        ('FONTNAME', (0, 0), (-1, -1), 'Helvetica'),
+        ('FONTSIZE', (0, 0), (-1, -1), 10),
+        ('PADDING', (0, 0), (-1, -1), 6),
+        ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor("#dee2e6")),
+    ]))
+    story.append(cfg_table)
+    story.append(Spacer(1, 16))
     
     # KPI Section
     story.append(Paragraph(T["pdf_kpi_section"], h2_style))
@@ -347,7 +388,7 @@ def generate_pdf(results: Dict, lang: str) -> bytes:
         ]))
         story.append(kpi_table)
     
-    story.append(Spacer(1, 20))
+    story.append(Spacer(1, 16))
     
     # Comparison Table
     story.append(Paragraph(T["pdf_comparison_section"], h2_style))
@@ -391,12 +432,25 @@ def generate_pdf(results: Dict, lang: str) -> bytes:
     comp_table.setStyle(TableStyle(table_style))
     story.append(comp_table)
     
-    story.append(Spacer(1, 20))
+    story.append(Spacer(1, 16))
+    
+    # Charts — embed pre-generated PNG images (at least 2)
+    chart_files = [
+        (EXPERIMENTS / "plots_reward.png", "Episode Reward — RL vs Baselines" if lang == "en" else "Bölüm Ödülü — RL vs Temel Politikalar"),
+        (EXPERIMENTS / "plots_tradeoff.png", "Latency vs Energy Trade-off" if lang == "en" else "Gecikme – Enerji Dengesi"),
+    ]
+    for chart_path, caption in chart_files:
+        if chart_path.exists():
+            chart_lbl = "Grafikler" if lang == "tr" else "Charts"
+            story.append(Paragraph(caption, h2_style))
+            img = Image(str(chart_path), width=15*cm, height=9*cm)
+            story.append(img)
+            story.append(Spacer(1, 12))
     
     # Winner Section
     if winner_key:
         story.append(Paragraph(T["pdf_winner_section"], h2_style))
-        winner_text = f"🏆 {_plabel(winner_key, lang)}"
+        winner_text = f"{_plabel(winner_key, lang)}"
         story.append(Paragraph(winner_text, ParagraphStyle('Winner', parent=styles['Normal'], fontSize=18, textColor=colors.HexColor("#155724"))))
     
     story.append(Spacer(1, 40))
@@ -434,98 +488,11 @@ with st.sidebar:
 T = TEXTS[lang]
 
 # ---------------------------------------------------------------------------
-# Global CSS — Typography Standard
+# Global CSS — Load from central style module
 # ---------------------------------------------------------------------------
-st.markdown("""
-<style>
-    /* Hide default Streamlit hamburger & footer */
-    #MainMenu {visibility: hidden;}
-    footer {visibility: hidden;}
-    
-    /* Typography Scale - Streamlit specific selectors */
-    h1, .stMarkdown h1, [data-testid="stMarkdownContainer"] h1 { 
-        font-size: 38px !important; font-weight: 700 !important; margin-bottom: 0.5rem !important; 
-    }
-    h2, .stMarkdown h2, [data-testid="stMarkdownContainer"] h2,
-    [data-testid="stHeadingWithArrowContainer"] { 
-        font-size: 29px !important; font-weight: 600 !important; 
-        border-bottom: 2px solid #0d6efd; padding-bottom: 0.5rem; margin-top: 2rem !important; margin-bottom: 1.2rem !important;
-    }
-    h3, .stMarkdown h3 {
-        margin-bottom: 0.8rem !important;
-    }
-    h3, .stMarkdown h3, [data-testid="stMarkdownContainer"] h3 { 
-        font-size: 22px !important; font-weight: 600 !important; margin-bottom: 0.8rem !important;
-    }
-    
-    /* Body text - exclude headings */
-    p, .stMarkdown p { font-size: 14px !important; line-height: 1.5 !important; }
-    
-    /* Captions / notes */
-    .stCaption, small, .element-container small { font-size: 12px !important; color: #6c757d !important; }
-    
-    /* KPI cards */
-    [data-testid="stMetricValue"] { font-size: 24px !important; font-weight: 700 !important; }
-    [data-testid="stMetricLabel"] { font-size: 13px !important; font-weight: 500 !important; }
-    [data-testid="stMetricDelta"] { font-size: 11px !important; }
-    
-    /* Tables */
-    .stDataFrame td, .stDataFrame th { font-size: 13px !important; padding: 8px !important; }
-    
-    /* Buttons */
-    .stButton button, .stDownloadButton button { 
-        font-size: 12px !important;
-        padding: 0.4rem 0.8rem !important;
-        min-height: 36px !important;
-    }
-    
-    /* Info boxes */
-    .stAlert p { font-size: 13px !important; }
-    
-    /* Header bar */
-    .header-bar {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        padding: 0.5rem 0;
-        margin-bottom: 1rem;
-        border-bottom: 1px solid #e9ecef;
-    }
-    .header-left h1 { margin: 0 !important; }
-    .header-left p { margin: 0 !important; color: #6c757d; font-size: 13px !important; }
-    
-    /* Winner badge */
-    .winner-badge {
-        display: inline-block;
-        background: linear-gradient(135deg, #28a745, #20c997);
-        color: white;
-        padding: 4px 12px;
-        border-radius: 20px;
-        font-size: 12px;
-        font-weight: 600;
-        margin-left: 8px;
-    }
-    
-    /* Consistent card heights & equal widths */
-    [data-testid="stMetric"] {
-        background: #f8f9fa;
-        padding: 1rem;
-        border-radius: 8px;
-        border: 1px solid #e9ecef;
-        min-height: 120px;
-        display: flex;
-        flex-direction: column;
-        justify-content: center;
-    }
-    [data-testid="column"] {
-        min-width: 0 !important;
-    }
-    [data-testid="stHorizontalBlock"] > [data-testid="column"] {
-        flex: 1 1 0 !important;
-        width: 0 !important;
-    }
-</style>
-""", unsafe_allow_html=True)
+_CSS_PATH = Path(__file__).parent / "style.css"
+if _CSS_PATH.exists():
+    st.markdown(f"<style>{_CSS_PATH.read_text(encoding='utf-8')}</style>", unsafe_allow_html=True)
 
 # ---------------------------------------------------------------------------
 # Load results
@@ -557,6 +524,11 @@ with col_buttons:
         btn_cols[0].button(T['download_pdf'], disabled=True)
     
     btn_cols[1].button(T['deploy_btn'], disabled=True, key="deploy_btn_header")
+
+# ---------------------------------------------------------------------------
+# Story Panel (P0) — "What this means" explanation
+# ---------------------------------------------------------------------------
+st.markdown(f'<div class="story-panel">{T["story_panel"]}</div>', unsafe_allow_html=True)
 
 # ---------------------------------------------------------------------------
 # 1) KPI Cards — Evaluation Summary
