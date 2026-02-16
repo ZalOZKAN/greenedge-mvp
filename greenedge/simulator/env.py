@@ -14,7 +14,7 @@ Reward:
 
 from __future__ import annotations
 
-from typing import Any, Dict, Optional, Tuple
+from typing import Any
 
 import gymnasium as gym
 import numpy as np
@@ -31,7 +31,7 @@ class GreenEdgeEnv(gym.Env):
 
     metadata = {"render_modes": []}
 
-    def __init__(self, config: Optional[EnvConfig] = None) -> None:
+    def __init__(self, config: EnvConfig | None = None) -> None:
         super().__init__()
         self.cfg = config or EnvConfig()
         self.rw: RewardWeights = self.cfg.reward
@@ -80,9 +80,9 @@ class GreenEdgeEnv(gym.Env):
     def reset(
         self,
         *,
-        seed: Optional[int] = None,
-        options: Optional[dict] = None,
-    ) -> Tuple[np.ndarray, Dict[str, Any]]:
+        seed: int | None = None,
+        options: dict | None = None,
+    ) -> tuple[np.ndarray, dict[str, Any]]:
         if seed is not None:
             self._rng = np.random.default_rng(seed)
 
@@ -98,7 +98,7 @@ class GreenEdgeEnv(gym.Env):
 
     def step(
         self, action: int
-    ) -> Tuple[np.ndarray, float, bool, bool, Dict[str, Any]]:
+    ) -> tuple[np.ndarray, float, bool, bool, dict[str, Any]]:
         action = int(action)
         assert self.action_space.contains(action), f"Invalid action {action}"
         self._t += 1
@@ -144,7 +144,7 @@ class GreenEdgeEnv(gym.Env):
         terminated = self._t >= self.cfg.episode_length
         truncated = False
 
-        info: Dict[str, Any] = {
+        info: dict[str, Any] = {
             "t": self._t,
             "target": target,
             "latency_ms": round(float(latency_ms), 2),

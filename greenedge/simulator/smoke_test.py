@@ -9,8 +9,6 @@ Expected output:
 
 from __future__ import annotations
 
-import textwrap
-
 from greenedge.simulator.config import EnvConfig
 from greenedge.simulator.env import ACTION_LABELS, GreenEdgeEnv
 

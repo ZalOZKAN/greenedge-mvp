@@ -20,3 +20,5 @@ ignore = [
 
 [lint.per-file-ignores]
 "tests/*" = ["B011"]  # assert False is allowed in tests
+"greenedge/api/main.py" = ["E402"]  # imports after app initialization
+"greenedge/dashboard/app.py" = ["E402"]  # imports after sys.path manipulation

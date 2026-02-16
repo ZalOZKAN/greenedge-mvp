@@ -1,7 +1,6 @@
 """Tests for baseline policies."""
 
 import numpy as np
-import pytest
 
 from greenedge.rl.baselines import (
     greedy_min_energy,

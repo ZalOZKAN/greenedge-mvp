@@ -64,13 +64,13 @@ class TestGreenEdgeEnv:
     def test_step_returns_correct_structure(self, env):
         env.reset()
         obs, reward, terminated, truncated, info = env.step(0)
-        
+
         assert obs.shape == (6,)
         assert isinstance(reward, float)
         assert isinstance(terminated, bool)
         assert isinstance(truncated, bool)
         assert isinstance(info, dict)
-        
+
         # Check info keys
         required_keys = ["t", "target", "latency_ms", "energy_per_mbps", "sla_violation"]
         for key in required_keys:

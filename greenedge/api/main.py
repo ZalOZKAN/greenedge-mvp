@@ -12,17 +12,15 @@ Endpoints:
 from __future__ import annotations
 
 import argparse
-import os
 from pathlib import Path
-from typing import List, Optional
 
 import numpy as np
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI
 from pydantic import BaseModel, Field
 
 from greenedge.logging_config import get_logger
-from greenedge.settings import settings
 from greenedge.rl.baselines import greedy_min_latency
+from greenedge.settings import settings
 from greenedge.simulator.config import EnvConfig
 from greenedge.simulator.env import ACTION_LABELS, GreenEdgeEnv
 
@@ -34,7 +32,7 @@ logger = get_logger("api")
 
 class ObservationIn(BaseModel):
     """Input: 6-dim observation vector."""
-    obs: List[float] = Field(
+    obs: list[float] = Field(
         ...,
         min_length=6,
         max_length=6,
@@ -69,6 +67,7 @@ app = FastAPI(
 
 # Add security middleware (rate limiting + optional API key auth)
 from starlette.middleware.base import BaseHTTPMiddleware
+
 from greenedge.api.security import create_security_middleware
 
 app.add_middleware(BaseHTTPMiddleware, dispatch=create_security_middleware())

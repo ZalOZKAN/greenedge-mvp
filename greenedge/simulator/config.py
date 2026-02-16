@@ -1,6 +1,7 @@
 """Default configuration for the GreenEdge simulator & reward."""
 
 from __future__ import annotations
+
 from dataclasses import dataclass, field
 
 

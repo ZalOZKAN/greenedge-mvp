@@ -1,6 +1,5 @@
 """Tests for FastAPI endpoints."""
 
-import numpy as np
 import pytest
 from fastapi.testclient import TestClient
 
@@ -33,7 +32,7 @@ class TestDecisionEndpoint:
         )
         assert response.status_code == 200
         data = response.json()
-        
+
         assert "action" in data
         assert data["action"] in [0, 1, 2]
         assert "action_label" in data
@@ -64,7 +63,7 @@ class TestDecisionEndpoint:
         )
         assert response.status_code == 200
         kpis = response.json()["predicted_kpis"]
-        
+
         assert "latency_ms" in kpis
         assert "energy_per_mbps" in kpis
         assert "sla_violation" in kpis

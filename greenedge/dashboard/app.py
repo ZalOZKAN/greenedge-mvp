@@ -7,11 +7,10 @@ Run:
 from __future__ import annotations
 
 import io
-import sys
 import json
-from pathlib import Path
-from typing import Dict, List
+import sys
 from datetime import datetime
+from pathlib import Path
 
 # --- Ensure repo root is on sys.path so 'greenedge' package is importable ---
 _REPO_ROOT = str(Path(__file__).resolve().parents[2])
@@ -19,7 +18,6 @@ if _REPO_ROOT not in sys.path:
     sys.path.insert(0, _REPO_ROOT)
 
 import random
-import time
 
 import numpy as np
 import pandas as pd
@@ -28,7 +26,7 @@ import streamlit as st
 
 from greenedge.rl.baselines import greedy_min_energy, greedy_min_latency, simple_threshold
 from greenedge.simulator.config import EnvConfig
-from greenedge.simulator.env import ACTION_LABELS, GreenEdgeEnv
+from greenedge.simulator.env import GreenEdgeEnv
 
 # ---------------------------------------------------------------------------
 # POLICY_MAP — Tek kaynak, her yerde bu kullanılacak
@@ -224,7 +222,7 @@ TARGET_LABELS = {
 # ---------------------------------------------------------------------------
 # Typography & Chart Constants
 # ---------------------------------------------------------------------------
-CHART_FONT = dict(family="Segoe UI, Arial, sans-serif", size=14, color="#212529")
+CHART_FONT = {"family": "Segoe UI, Arial, sans-serif", "size": 14, "color": "#212529"}
 AXIS_FONT_SIZE = 13
 TICK_FONT_SIZE = 12
 LEGEND_FONT_SIZE = 13
@@ -250,15 +248,15 @@ def _tlabel(key: str, lang: str) -> str:
     return TARGET_LABELS[lang].get(key, key)
 
 
-def load_results() -> Dict:
+def load_results() -> dict:
     """Load saved results as fallback."""
     if RESULTS_JSON.exists():
-        with open(RESULTS_JSON, "r", encoding="utf-8") as f:
+        with open(RESULTS_JSON, encoding="utf-8") as f:
             return json.load(f)
     return {}
 
 
-def _quick_evaluate(policy_fn, n_episodes: int = 30, seed: int | None = None) -> Dict:
+def _quick_evaluate(policy_fn, n_episodes: int = 30, seed: int | None = None) -> dict:
     """Run a quick evaluation (fewer episodes) and return KPI dict."""
     if seed is None:
         seed = random.randint(0, 999_999)
@@ -299,7 +297,7 @@ def _quick_evaluate(policy_fn, n_episodes: int = 30, seed: int | None = None) ->
     }
 
 
-def generate_live_results(seed: int | None = None) -> Dict:
+def generate_live_results(seed: int | None = None) -> dict:
     """Run all 4 policies on fresh random scenarios and return results dict."""
     if seed is None:
         seed = random.randint(0, 999_999)
@@ -332,7 +330,7 @@ def _load_sb3_policy():
     return st.session_state["sb3_model"]
 
 
-def run_live_episode(policy_name: str, seed: int | None = None) -> List[Dict]:
+def run_live_episode(policy_name: str, seed: int | None = None) -> list[dict]:
     if seed is None:
         seed = random.randint(0, 999_999)
     cfg = EnvConfig(seed=seed)
@@ -344,7 +342,7 @@ def run_live_episode(policy_name: str, seed: int | None = None) -> List[Dict]:
         "greedy_min_energy": greedy_min_energy,
         "simple_threshold": simple_threshold,
     }[policy_name]
-    steps: List[Dict] = []
+    steps: list[dict] = []
     done = False
     while not done:
         action = policy_fn(obs)
@@ -379,17 +377,23 @@ def _git_commit_hash() -> str:
         return "N/A"
 
 
-def generate_pdf(results: Dict, lang: str) -> bytes:
+def generate_pdf(results: dict, lang: str) -> bytes:
     """Generate comprehensive PDF report with Turkish character support and inline charts."""
     from reportlab.lib import colors
     from reportlab.lib.pagesizes import A4
-    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
     from reportlab.lib.units import cm
     from reportlab.pdfbase import pdfmetrics
     from reportlab.pdfbase.ttfonts import TTFont
     from reportlab.platypus import (
-        SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image,
-        PageBreak, HRFlowable,
+        HRFlowable,
+        Image,
+        PageBreak,
+        Paragraph,
+        SimpleDocTemplate,
+        Spacer,
+        Table,
+        TableStyle,
     )
 
     T = TEXTS[lang]
@@ -450,7 +454,7 @@ def generate_pdf(results: Dict, lang: str) -> bytes:
         textColor=colors.HexColor("#212529"),
         borderWidth=0, borderPadding=0,
     )
-    h3_style = ParagraphStyle(
+    ParagraphStyle(
         'PDFH3', parent=styles['Heading3'],
         fontName=FONT_BOLD, fontSize=13, spaceBefore=12, spaceAfter=6,
         textColor=colors.HexColor("#495057"),
@@ -1045,7 +1049,7 @@ with col_title:
 
 with col_buttons:
     btn_cols = st.columns(2)
-    
+
     # PDF download using ReportLab
     if results:
         pdf_bytes = generate_pdf(results, lang)
@@ -1057,7 +1061,7 @@ with col_buttons:
         )
     else:
         btn_cols[0].button(T['download_pdf'], disabled=True)
-    
+
     btn_cols[1].button(T['deploy_btn'], disabled=True, key="deploy_btn_header")
 
 # ---------------------------------------------------------------------------
@@ -1070,14 +1074,14 @@ st.markdown(f'<div class="story-panel">{T["story_panel"]}</div>', unsafe_allow_h
 # ---------------------------------------------------------------------------
 if results:
     st.header(f":material/analytics: {T['eval_header']}")
-    
+
     # Intro text - always visible
     st.markdown(T["eval_info_content"])
     st.markdown(T["terms_explain"])
-    
+
     highlight = results.get("rl_ppo", next(iter(results.values())))
     rl_key = "rl_ppo" if "rl_ppo" in results else list(results.keys())[0]
-    
+
     # KPI Cards with target hints
     cols = st.columns(4)
     cols[0].metric(
@@ -1100,14 +1104,14 @@ if results:
         delta=T["target_label"].format(val="<5%"),
         delta_color="off",
     )
-    
+
     # ---- Comparison table ----
     st.subheader(T["comparison"])
-    
+
     # Find the winner
     winner_key = max(results.keys(), key=lambda k: results[k]["avg_reward"])
     winner_label = _plabel(winner_key, lang)
-    
+
     rows = []
     for name in POLICY_KEYS:
         if name not in results:
@@ -1124,16 +1128,16 @@ if results:
             T["col_energy"]: f"{data['avg_energy_per_mbps']:.4f}",
             T["col_sla"]: f"{data['sla_violation_rate']*100:.1f}%",
         })
-    
+
     df_styled = pd.DataFrame(rows)
-    
+
     def highlight_winner(row):
         if "🏆" in str(row[T["col_policy"]]):
             return ["background-color: #d4edda; color: #155724; font-weight: 600"] * len(row)
         return [""] * len(row)
-    
+
     st.dataframe(df_styled.style.apply(highlight_winner, axis=1), use_container_width=True, hide_index=True)
-    
+
     # ---- Trade-off scatter ----
     st.subheader(T["tradeoff_title"])
     fig_trade = go.Figure()
@@ -1147,21 +1151,21 @@ if results:
             x=[data["avg_energy_per_mbps"]],
             y=[data["avg_latency"]],
             mode="markers+text",
-            marker=dict(size=24, color=c, line=dict(width=2, color="#fff")),
+            marker={"size": 24, "color": c, "line": {"width": 2, "color": "#fff"}},
             text=[label],
             textposition="top center",
-            textfont=dict(size=13, color=c, family="Segoe UI, Arial"),
+            textfont={"size": 13, "color": c, "family": "Segoe UI, Arial"},
             name=label,
         ))
     fig_trade.update_layout(
-        xaxis=dict(title=dict(text=T["tradeoff_x"], font=dict(size=AXIS_FONT_SIZE)),
-                   tickfont=dict(size=TICK_FONT_SIZE)),
-        yaxis=dict(title=dict(text=T["tradeoff_y"], font=dict(size=AXIS_FONT_SIZE)),
-                   tickfont=dict(size=TICK_FONT_SIZE)),
+        xaxis={"title": {"text": T["tradeoff_x"], "font": {"size": AXIS_FONT_SIZE}},
+                   "tickfont": {"size": TICK_FONT_SIZE}},
+        yaxis={"title": {"text": T["tradeoff_y"], "font": {"size": AXIS_FONT_SIZE}},
+                   "tickfont": {"size": TICK_FONT_SIZE}},
         font=CHART_FONT,
-        legend=dict(font=dict(size=LEGEND_FONT_SIZE)),
+        legend={"font": {"size": LEGEND_FONT_SIZE}},
         height=400,
-        margin=dict(t=20, b=50, l=50, r=20),
+        margin={"t": 20, "b": 50, "l": 50, "r": 20},
         plot_bgcolor="#fafafa",
     )
     st.plotly_chart(fig_trade, use_container_width=True)
@@ -1208,28 +1212,28 @@ if "live_steps" in st.session_state:
         fig_live.add_trace(go.Scatter(
             x=t_vals, y=latencies, mode="lines+markers",
             name=T["live_y_lat"],
-            line=dict(color="#0d6efd", width=2),
-            marker=dict(size=5),
+            line={"color": "#0d6efd", "width": 2},
+            marker={"size": 5},
         ))
         fig_live.add_trace(go.Scatter(
             x=t_vals, y=energies, mode="lines+markers",
             name=T["live_y_eng"],
             yaxis="y2",
-            line=dict(color="#fd7e14", width=2),
-            marker=dict(size=5),
+            line={"color": "#fd7e14", "width": 2},
+            marker={"size": 5},
         ))
         fig_live.update_layout(
-            title=dict(text=T["live_chart_title"].format(policy=live_display_saved), font=dict(size=14)),
-            xaxis=dict(title=dict(text=T["live_x"], font=dict(size=AXIS_FONT_SIZE)),
-                       tickfont=dict(size=TICK_FONT_SIZE)),
-            yaxis=dict(title=dict(text=T["live_y_lat"], font=dict(size=AXIS_FONT_SIZE, color="#0d6efd")),
-                       tickfont=dict(size=TICK_FONT_SIZE), side="left"),
-            yaxis2=dict(title=dict(text=T["live_y_eng"], font=dict(size=AXIS_FONT_SIZE, color="#fd7e14")),
-                        tickfont=dict(size=TICK_FONT_SIZE), overlaying="y", side="right"),
+            title={"text": T["live_chart_title"].format(policy=live_display_saved), "font": {"size": 14}},
+            xaxis={"title": {"text": T["live_x"], "font": {"size": AXIS_FONT_SIZE}},
+                       "tickfont": {"size": TICK_FONT_SIZE}},
+            yaxis={"title": {"text": T["live_y_lat"], "font": {"size": AXIS_FONT_SIZE, "color": "#0d6efd"}},
+                       "tickfont": {"size": TICK_FONT_SIZE}, "side": "left"},
+            yaxis2={"title": {"text": T["live_y_eng"], "font": {"size": AXIS_FONT_SIZE, "color": "#fd7e14"}},
+                        "tickfont": {"size": TICK_FONT_SIZE}, "overlaying": "y", "side": "right"},
             font=CHART_FONT,
-            legend=dict(font=dict(size=12), x=0.01, y=0.99),
+            legend={"font": {"size": 12}, "x": 0.01, "y": 0.99},
             height=350,
-            margin=dict(t=40, b=50),
+            margin={"t": 40, "b": 50},
             plot_bgcolor="#fafafa",
         )
         st.plotly_chart(fig_live, use_container_width=True)
@@ -1286,19 +1290,19 @@ if cmp_btn:
             y=cum_reward.tolist(),
             mode="lines",
             name=_plabel(pkey, lang),
-            line=dict(color=POLICY_COLORS[i], width=2.5),
+            line={"color": POLICY_COLORS[i], "width": 2.5},
         ))
 
     fig_cmp.update_layout(
-        title=dict(text=T["cmp_title"], font=dict(size=14)),
-        xaxis=dict(title=dict(text=T["cmp_x"], font=dict(size=AXIS_FONT_SIZE)),
-                   tickfont=dict(size=TICK_FONT_SIZE)),
-        yaxis=dict(title=dict(text=T["cmp_y"], font=dict(size=AXIS_FONT_SIZE)),
-                   tickfont=dict(size=TICK_FONT_SIZE)),
+        title={"text": T["cmp_title"], "font": {"size": 14}},
+        xaxis={"title": {"text": T["cmp_x"], "font": {"size": AXIS_FONT_SIZE}},
+                   "tickfont": {"size": TICK_FONT_SIZE}},
+        yaxis={"title": {"text": T["cmp_y"], "font": {"size": AXIS_FONT_SIZE}},
+                   "tickfont": {"size": TICK_FONT_SIZE}},
         font=CHART_FONT,
-        legend=dict(font=dict(size=12)),
+        legend={"font": {"size": 12}},
         height=400,
-        margin=dict(t=40, b=50),
+        margin={"t": 40, "b": 50},
         plot_bgcolor="#fafafa",
     )
     st.plotly_chart(fig_cmp, use_container_width=True)

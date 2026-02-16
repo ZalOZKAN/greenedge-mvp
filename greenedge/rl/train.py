@@ -10,11 +10,7 @@ Saves the trained policy under /experiments/policy.zip
 from __future__ import annotations
 
 import argparse
-import os
-import sys
 from pathlib import Path
-
-import numpy as np
 
 from greenedge.logging_config import get_logger
 from greenedge.simulator.config import EnvConfig

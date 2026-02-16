@@ -5,7 +5,6 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
 
 
 def _get_env(key: str, default: str) -> str:
@@ -35,7 +34,7 @@ class APISettings:
     host: str = _get_env("GREENEDGE_HOST", "127.0.0.1")
     port: int = _get_env_int("GREENEDGE_PORT", 8000)
     confidence_threshold: float = _get_env_float("GREENEDGE_CONFIDENCE_THRESHOLD", 0.55)
-    api_key: Optional[str] = _get_env("GREENEDGE_API_KEY", "") or None
+    api_key: str | None = _get_env("GREENEDGE_API_KEY", "") or None
     rate_limit_per_minute: int = _get_env_int("GREENEDGE_RATE_LIMIT_PER_MINUTE", 60)
 
 
@@ -47,7 +46,7 @@ class SimulatorSettings:
     default_seed: int = _get_env_int("GREENEDGE_DEFAULT_SEED", 42)
 
 
-@dataclass 
+@dataclass
 class LoggingSettings:
     """Logging settings."""
     level: str = _get_env("GREENEDGE_LOG_LEVEL", "INFO")
@@ -59,9 +58,9 @@ class Settings:
     api: APISettings
     simulator: SimulatorSettings
     logging: LoggingSettings
-    
+
     @classmethod
-    def load(cls) -> "Settings":
+    def load(cls) -> Settings:
         """Load settings from environment."""
         # Try to load from .env file if it exists
         try:
@@ -71,7 +70,7 @@ class Settings:
                 load_dotenv(env_path)
         except ImportError:
             pass  # python-dotenv not installed, use os.environ only
-        
+
         return cls(
             api=APISettings(),
             simulator=SimulatorSettings(),

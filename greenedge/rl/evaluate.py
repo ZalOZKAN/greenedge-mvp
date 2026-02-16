@@ -13,10 +13,12 @@ from __future__ import annotations
 
 import argparse
 import json
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable, Dict, List
+from typing import Any
 
 import matplotlib
+
 matplotlib.use("Agg")  # headless backend
 import matplotlib.pyplot as plt
 import numpy as np
@@ -24,7 +26,7 @@ import numpy as np
 from greenedge.logging_config import get_logger
 from greenedge.rl.baselines import greedy_min_energy, greedy_min_latency, simple_threshold
 from greenedge.simulator.config import EnvConfig
-from greenedge.simulator.env import ACTION_LABELS, GreenEdgeEnv
+from greenedge.simulator.env import GreenEdgeEnv
 
 logger = get_logger("evaluate")
 
@@ -36,16 +38,16 @@ def run_episodes(
     policy_fn: Callable[[np.ndarray], int],
     n_episodes: int,
     seed: int = 0,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Run *n_episodes* and collect KPI statistics."""
     cfg = EnvConfig(seed=seed)
     env = GreenEdgeEnv(config=cfg)
 
-    all_rewards: List[float] = []
-    all_latencies: List[float] = []
-    all_energies: List[float] = []
-    all_sla: List[int] = []
-    episode_rewards: List[float] = []
+    all_rewards: list[float] = []
+    all_latencies: list[float] = []
+    all_energies: list[float] = []
+    all_sla: list[int] = []
+    episode_rewards: list[float] = []
 
     for ep in range(n_episodes):
         obs, _ = env.reset(seed=seed + ep)
@@ -107,7 +109,7 @@ def _load_sb3_policy(policy_path: str):
 # Plotting
 # ---------------------------------------------------------------------------
 
-def plot_rewards(results: Dict[str, Dict], out_path: Path) -> None:
+def plot_rewards(results: dict[str, dict], out_path: Path) -> None:
     """Bar + line chart comparing episode rewards across policies."""
     fig, ax = plt.subplots(figsize=(10, 5))
 
@@ -126,7 +128,7 @@ def plot_rewards(results: Dict[str, Dict], out_path: Path) -> None:
     print(f"[plot] {out_path}")
 
 
-def plot_tradeoff(results: Dict[str, Dict], out_path: Path) -> None:
+def plot_tradeoff(results: dict[str, dict], out_path: Path) -> None:
     """Latency vs Energy scatter with avg + p95 markers."""
     fig, ax = plt.subplots(figsize=(8, 6))
 
@@ -174,10 +176,10 @@ def evaluate(
     policy_path: str | None,
     out_dir: Path,
     seed: int = 0,
-) -> Dict[str, Dict]:
+) -> dict[str, dict]:
     """Run all policies and save results + plots."""
 
-    policies: Dict[str, Callable[[np.ndarray], int]] = {
+    policies: dict[str, Callable[[np.ndarray], int]] = {
         "greedy_min_latency": greedy_min_latency,
         "greedy_min_energy": greedy_min_energy,
         "simple_threshold": simple_threshold,
@@ -190,7 +192,7 @@ def evaluate(
     else:
         print("[eval] No trained policy found – evaluating baselines only.")
 
-    results: Dict[str, Dict] = {}
+    results: dict[str, dict] = {}
     for name, fn in policies.items():
         print(f"[eval] Running {name} for {n_episodes} episodes …")
         stats = run_episodes(fn, n_episodes, seed=seed)
