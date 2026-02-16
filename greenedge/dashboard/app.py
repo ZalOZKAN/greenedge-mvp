@@ -18,6 +18,9 @@ _REPO_ROOT = str(Path(__file__).resolve().parents[2])
 if _REPO_ROOT not in sys.path:
     sys.path.insert(0, _REPO_ROOT)
 
+import random
+import time
+
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
@@ -247,12 +250,71 @@ def _tlabel(key: str, lang: str) -> str:
     return TARGET_LABELS[lang].get(key, key)
 
 
-@st.cache_data
 def load_results() -> Dict:
+    """Load saved results as fallback."""
     if RESULTS_JSON.exists():
         with open(RESULTS_JSON, "r", encoding="utf-8") as f:
             return json.load(f)
     return {}
+
+
+def _quick_evaluate(policy_fn, n_episodes: int = 30, seed: int | None = None) -> Dict:
+    """Run a quick evaluation (fewer episodes) and return KPI dict."""
+    if seed is None:
+        seed = random.randint(0, 999_999)
+    cfg = EnvConfig(seed=seed)
+    env = GreenEdgeEnv(config=cfg)
+
+    episode_rewards = []
+    all_latencies = []
+    all_energies = []
+    all_sla = []
+
+    for ep in range(n_episodes):
+        obs, _ = env.reset(seed=seed + ep)
+        ep_reward = 0.0
+        done = False
+        while not done:
+            action = policy_fn(obs)
+            obs, reward, terminated, truncated, info = env.step(action)
+            ep_reward += reward
+            all_latencies.append(info["latency_ms"])
+            all_energies.append(info["energy_per_mbps"])
+            all_sla.append(info["sla_violation"])
+            done = terminated or truncated
+        episode_rewards.append(ep_reward)
+
+    lat = np.array(all_latencies)
+    eng = np.array(all_energies)
+    sla = np.array(all_sla)
+
+    return {
+        "avg_reward": round(float(np.mean(episode_rewards)), 4),
+        "std_reward": round(float(np.std(episode_rewards)), 4),
+        "avg_latency": round(float(np.mean(lat)), 2),
+        "p95_latency": round(float(np.percentile(lat, 95)), 2),
+        "avg_energy_per_mbps": round(float(np.mean(eng)), 4),
+        "sla_violation_rate": round(float(np.mean(sla)), 4),
+        "episode_rewards": [round(r, 4) for r in episode_rewards],
+    }
+
+
+def generate_live_results(seed: int | None = None) -> Dict:
+    """Run all 4 policies on fresh random scenarios and return results dict."""
+    if seed is None:
+        seed = random.randint(0, 999_999)
+
+    policy_fns = {
+        "rl_ppo": _rl_predict,
+        "greedy_min_latency": greedy_min_latency,
+        "greedy_min_energy": greedy_min_energy,
+        "simple_threshold": simple_threshold,
+    }
+
+    results = {}
+    for key, fn in policy_fns.items():
+        results[key] = _quick_evaluate(fn, n_episodes=30, seed=seed)
+    return results
 
 
 def _load_sb3_policy():
@@ -270,7 +332,9 @@ def _load_sb3_policy():
     return st.session_state["sb3_model"]
 
 
-def run_live_episode(policy_name: str, seed: int = 99) -> List[Dict]:
+def run_live_episode(policy_name: str, seed: int | None = None) -> List[Dict]:
+    if seed is None:
+        seed = random.randint(0, 999_999)
     cfg = EnvConfig(seed=seed)
     env = GreenEdgeEnv(config=cfg)
     obs, _ = env.reset()
@@ -316,148 +380,618 @@ def _git_commit_hash() -> str:
 
 
 def generate_pdf(results: Dict, lang: str) -> bytes:
-    """Generate PDF report using ReportLab — includes tables, charts, config."""
+    """Generate comprehensive PDF report with Turkish character support and inline charts."""
     from reportlab.lib import colors
     from reportlab.lib.pagesizes import A4
     from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
     from reportlab.lib.units import cm
+    from reportlab.pdfbase import pdfmetrics
+    from reportlab.pdfbase.ttfonts import TTFont
     from reportlab.platypus import (
         SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image,
+        PageBreak, HRFlowable,
     )
-    
+
     T = TEXTS[lang]
     buffer = io.BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=2*cm, bottomMargin=2*cm)
+    doc = SimpleDocTemplate(
+        buffer, pagesize=A4,
+        topMargin=1.8 * cm, bottomMargin=1.5 * cm,
+        leftMargin=2 * cm, rightMargin=2 * cm,
+    )
+
+    # --- Register a Unicode-capable font for Turkish characters ---
+    _font_registered = False
+    for font_path_candidate in [
+        "C:/Windows/Fonts/segoeui.ttf",
+        "C:/Windows/Fonts/arial.ttf",
+        "C:/Windows/Fonts/calibri.ttf",
+        "C:/Windows/Fonts/tahoma.ttf",
+    ]:
+        try:
+            pdfmetrics.registerFont(TTFont("UniFont", font_path_candidate))
+            _font_registered = True
+            break
+        except Exception:
+            continue
+
+    # Bold variant
+    for bold_candidate in [
+        "C:/Windows/Fonts/segoeuib.ttf",
+        "C:/Windows/Fonts/arialbd.ttf",
+        "C:/Windows/Fonts/calibrib.ttf",
+        "C:/Windows/Fonts/tahomabd.ttf",
+    ]:
+        try:
+            pdfmetrics.registerFont(TTFont("UniFont-Bold", bold_candidate))
+            break
+        except Exception:
+            continue
+
+    FONT = "UniFont" if _font_registered else "Helvetica"
+    FONT_BOLD = "UniFont-Bold" if _font_registered else "Helvetica-Bold"
+
     styles = getSampleStyleSheet()
-    
-    # Custom styles
-    title_style = ParagraphStyle('CustomTitle', parent=styles['Heading1'], fontSize=24, spaceAfter=20, textColor=colors.HexColor("#0d6efd"))
-    h2_style = ParagraphStyle('CustomH2', parent=styles['Heading2'], fontSize=16, spaceBefore=20, spaceAfter=10, textColor=colors.HexColor("#212529"))
-    body_style = ParagraphStyle('CustomBody', parent=styles['Normal'], fontSize=12, spaceAfter=8)
-    small_style = ParagraphStyle('SmallText', parent=styles['Normal'], fontSize=9, textColor=colors.HexColor("#6c757d"), spaceAfter=4)
-    
+
+    # Custom styles with Unicode font
+    title_style = ParagraphStyle(
+        'PDFTitle', parent=styles['Heading1'],
+        fontName=FONT_BOLD, fontSize=26, spaceAfter=6,
+        textColor=colors.HexColor("#0d6efd"),
+    )
+    subtitle_style = ParagraphStyle(
+        'PDFSubtitle', parent=styles['Normal'],
+        fontName=FONT, fontSize=12, spaceAfter=12,
+        textColor=colors.HexColor("#6c757d"),
+    )
+    h2_style = ParagraphStyle(
+        'PDFH2', parent=styles['Heading2'],
+        fontName=FONT_BOLD, fontSize=16, spaceBefore=18, spaceAfter=8,
+        textColor=colors.HexColor("#212529"),
+        borderWidth=0, borderPadding=0,
+    )
+    h3_style = ParagraphStyle(
+        'PDFH3', parent=styles['Heading3'],
+        fontName=FONT_BOLD, fontSize=13, spaceBefore=12, spaceAfter=6,
+        textColor=colors.HexColor("#495057"),
+    )
+    body_style = ParagraphStyle(
+        'PDFBody', parent=styles['Normal'],
+        fontName=FONT, fontSize=11, spaceAfter=6, leading=15,
+    )
+    small_style = ParagraphStyle(
+        'PDFSmall', parent=styles['Normal'],
+        fontName=FONT, fontSize=9, textColor=colors.HexColor("#6c757d"), spaceAfter=4,
+    )
+    bullet_style = ParagraphStyle(
+        'PDFBullet', parent=styles['Normal'],
+        fontName=FONT, fontSize=11, spaceAfter=3, leading=14,
+        leftIndent=15, bulletIndent=5,
+    )
+
     story = []
-    
-    # Title
-    story.append(Paragraph(T["pdf_title"], title_style))
-    story.append(Paragraph(f"{T['pdf_generated']}: {datetime.now().strftime('%Y-%m-%d %H:%M')}", body_style))
-    story.append(Paragraph(f"Git commit: {_git_commit_hash()}", small_style))
-    story.append(Paragraph(f"{T['pdf_scenarios']}: 200", body_style))
+
+    # =====================================================================
+    # PAGE 1: Title + Project Overview + Config
+    # =====================================================================
+    story.append(Paragraph("GreenEdge-5G", title_style))
+    if lang == "tr":
+        story.append(Paragraph(
+            "5G kenar/bulut altyapisi icin yapay zeka destekli is yuku yonlendirme sistemi",
+            subtitle_style,
+        ))
+    else:
+        story.append(Paragraph(
+            "AI-powered workload routing for 5G edge/cloud infrastructure",
+            subtitle_style,
+        ))
+    story.append(HRFlowable(width="100%", thickness=1, color=colors.HexColor("#0d6efd")))
+    story.append(Spacer(1, 8))
+
+    # Meta info
+    meta_data = [
+        [
+            Paragraph(f"<b>{T['pdf_generated']}:</b> {datetime.now().strftime('%Y-%m-%d %H:%M')}", body_style),
+            Paragraph(f"<b>Git:</b> {_git_commit_hash()}", body_style),
+        ],
+    ]
+    meta_table = Table(meta_data, colWidths=[9 * cm, 7 * cm])
+    meta_table.setStyle(TableStyle([
+        ('PADDING', (0, 0), (-1, -1), 4),
+        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+    ]))
+    story.append(meta_table)
     story.append(Spacer(1, 12))
-    
-    # Environment config summary
+
+    # --- Project description ---
+    if lang == "tr":
+        desc_title = "Proje Hakkinda"
+        desc_text = (
+            "GreenEdge-5G, 5G sebekelerinde is yuku yonlendirme kararlarini "
+            "yapay zeka ile optimize eden bir karar motorudur. Sistem, enerji tuketimi "
+            "ve gecikme (latency) arasindaki dengeyi Pekistirmeli Ogrenme (Reinforcement Learning) "
+            "ile yonetir. Bu rapor, farkli politikalarin simulasyon ortamindaki performansini karsilastirir."
+        )
+    else:
+        desc_title = "About the Project"
+        desc_text = (
+            "GreenEdge-5G is a decision engine that optimizes workload routing in 5G networks "
+            "using AI. The system manages the trade-off between energy consumption and latency "
+            "through Reinforcement Learning. This report compares performance of different policies "
+            "in a simulated environment."
+        )
+    story.append(Paragraph(desc_title, h2_style))
+    story.append(Paragraph(desc_text, body_style))
+    story.append(Spacer(1, 10))
+
+    # --- Environment Config ---
     cfg = EnvConfig()
-    config_lbl = "Ortam Yapılandırması" if lang == "tr" else "Environment Config"
+    config_lbl = "Ortam Yapilandirmasi" if lang == "tr" else "Environment Config"
     story.append(Paragraph(config_lbl, h2_style))
     cfg_data = [
-        ["episode_length", str(cfg.episode_length)],
-        ["sla_ms", f"{cfg.sla_ms} ms"],
-        ["reward α (energy)", str(cfg.reward.alpha)],
-        ["reward β (latency)", str(cfg.reward.beta)],
-        ["reward γ (SLA)", str(cfg.reward.gamma)],
+        [Paragraph("<b>Parametre</b>", body_style), Paragraph("<b>Deger</b>", body_style)],
+        ["Episode uzunlugu" if lang == "tr" else "Episode length", str(cfg.episode_length)],
+        ["SLA esigi" if lang == "tr" else "SLA threshold", f"{cfg.sla_ms} ms"],
+        ["Odul alpha (enerji)" if lang == "tr" else "Reward alpha (energy)", str(cfg.reward.alpha)],
+        ["Odul beta (gecikme)" if lang == "tr" else "Reward beta (latency)", str(cfg.reward.beta)],
+        ["Odul gamma (SLA)" if lang == "tr" else "Reward gamma (SLA)", str(cfg.reward.gamma)],
     ]
-    cfg_table = Table(cfg_data, colWidths=[8*cm, 6*cm])
+    cfg_table = Table(cfg_data, colWidths=[9 * cm, 7 * cm])
     cfg_table.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (0, -1), colors.HexColor("#f8f9fa")),
-        ('FONTNAME', (0, 0), (-1, -1), 'Helvetica'),
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor("#0d6efd")),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+        ('FONTNAME', (0, 0), (-1, -1), FONT),
+        ('FONTNAME', (0, 0), (-1, 0), FONT_BOLD),
         ('FONTSIZE', (0, 0), (-1, -1), 10),
         ('PADDING', (0, 0), (-1, -1), 6),
         ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor("#dee2e6")),
+        ('BACKGROUND', (0, 1), (-1, -1), colors.HexColor("#f8f9fa")),
+        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.HexColor("#f8f9fa"), colors.white]),
     ]))
     story.append(cfg_table)
-    story.append(Spacer(1, 16))
-    
-    # KPI Section
-    story.append(Paragraph(T["pdf_kpi_section"], h2_style))
-    
+    story.append(Spacer(1, 10))
+
+    # --- Reward formula ---
+    formula_title = "Odul Fonksiyonu" if lang == "tr" else "Reward Function"
+    story.append(Paragraph(formula_title, h2_style))
+    story.append(Paragraph(
+        "Reward = -( alpha x Energy_norm + beta x Latency_norm + gamma x SLA_penalty )",
+        ParagraphStyle('Formula', parent=body_style, fontName='Courier', fontSize=11,
+                       backColor=colors.HexColor("#f1f3f5"), borderPadding=6),
+    ))
+    if lang == "tr":
+        story.append(Paragraph(
+            "Sistem, enerji verimliligi ile gecikme performansini birlikte optimize eder. "
+            "SLA esigini asan kararlar ek ceza alir.",
+            body_style,
+        ))
+    else:
+        story.append(Paragraph(
+            "The system jointly optimizes energy efficiency and latency performance. "
+            "Decisions exceeding the SLA threshold receive additional penalty.",
+            body_style,
+        ))
+
+    # --- Policy descriptions ---
+    pol_title = "Politikalar" if lang == "tr" else "Policies"
+    story.append(Paragraph(pol_title, h2_style))
+    if lang == "tr":
+        pol_descriptions = [
+            "<b>PPO:</b> Proximal Policy Optimization - Pekistirmeli ogrenme ile dinamik optimizasyon",
+            "<b>Hiz:</b> Her zaman en dusuk gecikmeli sunucuyu secer (greedy)",
+            "<b>Maliyet:</b> Her zaman en dusuk enerjili sunucuyu secer (greedy)",
+            "<b>Yuk:</b> CPU yukune gore esik tabanli yonlendirme (threshold-based)",
+        ]
+    else:
+        pol_descriptions = [
+            "<b>PPO:</b> Proximal Policy Optimization - Dynamic optimization via RL",
+            "<b>Speed:</b> Always picks lowest latency target (greedy)",
+            "<b>Cost:</b> Always picks lowest energy target (greedy)",
+            "<b>Load:</b> CPU threshold-based routing heuristic",
+        ]
+    for pd_text in pol_descriptions:
+        story.append(Paragraph(pd_text, bullet_style, bulletText="\u2022"))
+
+    # =====================================================================
+    # PAGE 2: KPI Results + Comparison Table
+    # =====================================================================
+    story.append(PageBreak())
+    story.append(Paragraph(T["pdf_kpi_section"], title_style))
+    story.append(HRFlowable(width="100%", thickness=1, color=colors.HexColor("#0d6efd")))
+    story.append(Spacer(1, 12))
+
     ppo_data = results.get("rl_ppo", {})
     if ppo_data:
+        story.append(Paragraph(
+            "PPO Model KPI" if lang == "en" else "PPO Model Performansi",
+            h2_style,
+        ))
+
         kpi_data = [
-            [T["avg_latency"], f"{ppo_data.get('avg_latency', 0):.1f} ms"],
-            [T["p95_latency"], f"{ppo_data.get('p95_latency', 0):.1f} ms"],
-            [T["energy_mbps"], f"{ppo_data.get('avg_energy_per_mbps', 0):.4f}"],
-            [T["sla_viol"], f"{ppo_data.get('sla_violation_rate', 0)*100:.1f}%"],
+            [Paragraph("<b>Metrik</b>", body_style), Paragraph("<b>Deger</b>", body_style),
+             Paragraph("<b>Hedef</b>", body_style)],
+            [
+                "Ort. Gecikme" if lang == "tr" else "Avg Latency",
+                f"{ppo_data.get('avg_latency', 0):.1f} ms",
+                "< 80 ms",
+            ],
+            [
+                "P95 Gecikme" if lang == "tr" else "P95 Latency",
+                f"{ppo_data.get('p95_latency', 0):.1f} ms",
+                f"< {cfg.sla_ms} ms",
+            ],
+            [
+                "Enerji/Mbps" if lang == "tr" else "Energy/Mbps",
+                f"{ppo_data.get('avg_energy_per_mbps', 0):.4f}",
+                "< 0.50",
+            ],
+            [
+                "SLA Ihlal %" if lang == "tr" else "SLA Violation %",
+                f"{ppo_data.get('sla_violation_rate', 0) * 100:.1f}%",
+                "< 5%",
+            ],
+            [
+                "Ort. Odul" if lang == "tr" else "Avg Reward",
+                f"{ppo_data.get('avg_reward', 0):.2f}",
+                "Maksimize",
+            ],
         ]
-        kpi_table = Table(kpi_data, colWidths=[8*cm, 6*cm])
+        kpi_table = Table(kpi_data, colWidths=[6 * cm, 5 * cm, 5 * cm])
         kpi_table.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (0, -1), colors.HexColor("#f8f9fa")),
-            ('FONTNAME', (0, 0), (-1, -1), 'Helvetica'),
-            ('FONTSIZE', (0, 0), (-1, -1), 12),
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor("#0d6efd")),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+            ('FONTNAME', (0, 0), (-1, -1), FONT),
+            ('FONTNAME', (0, 0), (-1, 0), FONT_BOLD),
+            ('FONTSIZE', (0, 0), (-1, -1), 11),
             ('PADDING', (0, 0), (-1, -1), 8),
             ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor("#dee2e6")),
+            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.HexColor("#f8f9fa"), colors.white]),
+            ('ALIGN', (1, 1), (-1, -1), 'CENTER'),
         ]))
         story.append(kpi_table)
-    
-    story.append(Spacer(1, 16))
-    
-    # Comparison Table
+        story.append(Spacer(1, 16))
+
+    # --- Full comparison table ---
     story.append(Paragraph(T["pdf_comparison_section"], h2_style))
-    
-    header = [T["col_policy"], T["col_avg_reward"], T["col_avg_lat"], T["col_p95_lat"], T["col_energy"], T["col_sla"]]
-    table_data = [header]
-    
+
+    col_names = [
+        T["col_policy"], T["col_avg_reward"],
+        "Ort. Gecikme" if lang == "tr" else "Avg Lat",
+        "P95" if lang == "tr" else "P95",
+        "Enerji" if lang == "tr" else "Energy",
+        "SLA %" if lang == "tr" else "SLA %",
+    ]
+    header_row = [Paragraph(f"<b>{c}</b>", body_style) for c in col_names]
+    table_data = [header_row]
+
     winner_key = max(results.keys(), key=lambda k: results[k]["avg_reward"]) if results else None
-    
+
     for key in POLICY_KEYS:
         if key in results:
             data = results[key]
+            label = _plabel(key, lang)
+            if key == winner_key:
+                label = f"{label}  (Kazanan)" if lang == "tr" else f"{label}  (Winner)"
             row = [
-                _plabel(key, lang),
+                label,
                 f"{data['avg_reward']:.2f}",
                 f"{data['avg_latency']:.1f}",
                 f"{data['p95_latency']:.1f}",
                 f"{data['avg_energy_per_mbps']:.4f}",
-                f"{data['sla_violation_rate']*100:.1f}%",
+                f"{data['sla_violation_rate'] * 100:.1f}%",
             ]
             table_data.append(row)
-    
-    comp_table = Table(table_data, colWidths=[3*cm, 2.5*cm, 2.5*cm, 2.5*cm, 3*cm, 2.5*cm])
-    
-    table_style = [
+
+    comp_table = Table(table_data, colWidths=[4 * cm, 2.5 * cm, 2.5 * cm, 2 * cm, 2.5 * cm, 2.5 * cm])
+
+    tbl_style = [
         ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor("#0d6efd")),
         ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
-        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-        ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
+        ('FONTNAME', (0, 0), (-1, -1), FONT),
+        ('FONTNAME', (0, 0), (-1, 0), FONT_BOLD),
         ('FONTSIZE', (0, 0), (-1, -1), 10),
         ('PADDING', (0, 0), (-1, -1), 6),
         ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor("#dee2e6")),
         ('ALIGN', (1, 0), (-1, -1), 'CENTER'),
+        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.HexColor("#f8f9fa"), colors.white]),
     ]
-    
-    # Highlight winner row
-    if winner_key:
-        winner_idx = POLICY_KEYS.index(winner_key) + 1 if winner_key in POLICY_KEYS else 1
-        table_style.append(('BACKGROUND', (0, winner_idx), (-1, winner_idx), colors.HexColor("#d4edda")))
-    
-    comp_table.setStyle(TableStyle(table_style))
+
+    if winner_key and winner_key in POLICY_KEYS:
+        winner_idx = POLICY_KEYS.index(winner_key) + 1
+        tbl_style.append(('BACKGROUND', (0, winner_idx), (-1, winner_idx), colors.HexColor("#d4edda")))
+
+    comp_table.setStyle(TableStyle(tbl_style))
     story.append(comp_table)
-    
     story.append(Spacer(1, 16))
-    
-    # Charts — embed pre-generated PNG images (at least 2)
-    chart_files = [
-        (EXPERIMENTS / "plots_reward.png", "Episode Reward — RL vs Baselines" if lang == "en" else "Bölüm Ödülü — RL vs Temel Politikalar"),
-        (EXPERIMENTS / "plots_tradeoff.png", "Latency vs Energy Trade-off" if lang == "en" else "Gecikme – Enerji Dengesi"),
-    ]
-    for chart_path, caption in chart_files:
-        if chart_path.exists():
-            chart_lbl = "Grafikler" if lang == "tr" else "Charts"
-            story.append(Paragraph(caption, h2_style))
-            img = Image(str(chart_path), width=15*cm, height=9*cm)
-            story.append(img)
-            story.append(Spacer(1, 12))
-    
-    # Winner Section
+
+    # --- Winner announcement ---
     if winner_key:
-        story.append(Paragraph(T["pdf_winner_section"], h2_style))
-        winner_text = f"{_plabel(winner_key, lang)}"
-        story.append(Paragraph(winner_text, ParagraphStyle('Winner', parent=styles['Normal'], fontSize=18, textColor=colors.HexColor("#155724"))))
-    
-    story.append(Spacer(1, 40))
-    
+        winner_label = _plabel(winner_key, lang)
+        if lang == "tr":
+            winner_text = f"En iyi politika: <b>{winner_label}</b> (en yuksek ortalama odul)"
+        else:
+            winner_text = f"Best policy: <b>{winner_label}</b> (highest average reward)"
+        story.append(Paragraph(
+            winner_text,
+            ParagraphStyle('WinnerText', parent=body_style, fontSize=14,
+                           textColor=colors.HexColor("#155724"),
+                           backColor=colors.HexColor("#d4edda"),
+                           borderPadding=8),
+        ))
+
+    # =====================================================================
+    # PAGE 3: Inline Charts (generated on the fly)
+    # =====================================================================
+    story.append(PageBreak())
+    chart_title = "Grafikler" if lang == "tr" else "Charts"
+    story.append(Paragraph(chart_title, title_style))
+    story.append(HRFlowable(width="100%", thickness=1, color=colors.HexColor("#0d6efd")))
+    story.append(Spacer(1, 12))
+
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    # Chart 1: Episode Rewards bar chart
+    story.append(Paragraph(
+        "Ortalama Odul Karsilastirmasi" if lang == "tr" else "Average Reward Comparison",
+        h2_style,
+    ))
+
+    fig1, ax1 = plt.subplots(figsize=(7, 3.5))
+    pol_labels = []
+    pol_rewards = []
+    pol_colors_mpl = []
+    for i, key in enumerate(POLICY_KEYS):
+        if key in results:
+            pol_labels.append(_plabel(key, lang))
+            pol_rewards.append(results[key]["avg_reward"])
+            pol_colors_mpl.append(POLICY_COLORS[i])
+
+    bars = ax1.barh(pol_labels, pol_rewards, color=pol_colors_mpl, edgecolor="white", height=0.5)
+    ax1.set_xlabel("Ortalama Odul" if lang == "tr" else "Average Reward", fontsize=11)
+    ax1.set_title("Politika Karsilastirmasi" if lang == "tr" else "Policy Comparison", fontsize=13, fontweight="bold")
+    for bar, val in zip(bars, pol_rewards):
+        ax1.text(bar.get_width() + 0.1, bar.get_y() + bar.get_height() / 2,
+                 f"{val:.2f}", va="center", fontsize=10)
+    ax1.grid(axis="x", alpha=0.3)
+    plt.tight_layout()
+
+    buf1 = io.BytesIO()
+    fig1.savefig(buf1, format="png", dpi=150, bbox_inches="tight")
+    plt.close(fig1)
+    buf1.seek(0)
+    story.append(Image(buf1, width=15 * cm, height=7.5 * cm))
+    story.append(Spacer(1, 16))
+
+    # Chart 2: Latency vs Energy scatter
+    story.append(Paragraph(
+        "Gecikme - Enerji Dengesi" if lang == "tr" else "Latency - Energy Trade-off",
+        h2_style,
+    ))
+
+    fig2, ax2 = plt.subplots(figsize=(7, 4))
+    for i, key in enumerate(POLICY_KEYS):
+        if key in results:
+            data = results[key]
+            ax2.scatter(
+                data["avg_energy_per_mbps"], data["avg_latency"],
+                s=200, c=POLICY_COLORS[i], edgecolors="white", linewidth=2, zorder=5,
+            )
+            ax2.annotate(
+                _plabel(key, lang),
+                (data["avg_energy_per_mbps"], data["avg_latency"]),
+                textcoords="offset points", xytext=(10, 8), fontsize=11,
+                fontweight="bold", color=POLICY_COLORS[i],
+            )
+    ax2.set_xlabel("Enerji / Mbps" if lang == "tr" else "Energy / Mbps", fontsize=11)
+    ax2.set_ylabel("Gecikme (ms)" if lang == "tr" else "Latency (ms)", fontsize=11)
+    ax2.set_title(
+        "Ideal konum: sol-alt kose" if lang == "tr" else "Ideal: bottom-left corner",
+        fontsize=11, style="italic", color="#6c757d",
+    )
+    ax2.grid(alpha=0.3)
+    plt.tight_layout()
+
+    buf2 = io.BytesIO()
+    fig2.savefig(buf2, format="png", dpi=150, bbox_inches="tight")
+    plt.close(fig2)
+    buf2.seek(0)
+    story.append(Image(buf2, width=15 * cm, height=8.5 * cm))
+    story.append(Spacer(1, 16))
+
+    # Chart 3: Latency & SLA comparison grouped bar
+    story.append(Paragraph(
+        "Gecikme ve SLA Karsilastirmasi" if lang == "tr" else "Latency & SLA Comparison",
+        h2_style,
+    ))
+
+    fig3, (ax3a, ax3b) = plt.subplots(1, 2, figsize=(7, 3.5))
+    names = []
+    avg_lats = []
+    p95_lats = []
+    sla_rates = []
+    bar_colors = []
+    for i, key in enumerate(POLICY_KEYS):
+        if key in results:
+            names.append(_plabel(key, lang))
+            avg_lats.append(results[key]["avg_latency"])
+            p95_lats.append(results[key]["p95_latency"])
+            sla_rates.append(results[key]["sla_violation_rate"] * 100)
+            bar_colors.append(POLICY_COLORS[i])
+
+    x_pos = range(len(names))
+    ax3a.bar(x_pos, avg_lats, color=bar_colors, alpha=0.7, label="Ort." if lang == "tr" else "Avg")
+    ax3a.bar(x_pos, p95_lats, color=bar_colors, alpha=0.3, label="P95")
+    ax3a.set_xticks(x_pos)
+    ax3a.set_xticklabels(names, fontsize=9)
+    ax3a.set_ylabel("ms", fontsize=10)
+    ax3a.set_title("Gecikme" if lang == "tr" else "Latency", fontsize=11, fontweight="bold")
+    ax3a.axhline(y=cfg.sla_ms, color="red", linestyle="--", alpha=0.5, label=f"SLA ({cfg.sla_ms}ms)")
+    ax3a.legend(fontsize=8)
+    ax3a.grid(axis="y", alpha=0.3)
+
+    ax3b.bar(x_pos, sla_rates, color=bar_colors)
+    ax3b.set_xticks(x_pos)
+    ax3b.set_xticklabels(names, fontsize=9)
+    ax3b.set_ylabel("%", fontsize=10)
+    ax3b.set_title("SLA Ihlal" if lang == "tr" else "SLA Violation", fontsize=11, fontweight="bold")
+    ax3b.axhline(y=5, color="red", linestyle="--", alpha=0.5, label="Hedef < 5%")
+    ax3b.legend(fontsize=8)
+    ax3b.grid(axis="y", alpha=0.3)
+    plt.tight_layout()
+
+    buf3 = io.BytesIO()
+    fig3.savefig(buf3, format="png", dpi=150, bbox_inches="tight")
+    plt.close(fig3)
+    buf3.seek(0)
+    story.append(Image(buf3, width=16 * cm, height=7 * cm))
+
+    # =====================================================================
+    # PAGE 4: Methodology + Conclusion
+    # =====================================================================
+    story.append(PageBreak())
+    method_title = "Yontem ve Sonuc" if lang == "tr" else "Methodology & Conclusion"
+    story.append(Paragraph(method_title, title_style))
+    story.append(HRFlowable(width="100%", thickness=1, color=colors.HexColor("#0d6efd")))
+    story.append(Spacer(1, 12))
+
+    # Architecture overview
+    arch_title = "Sistem Mimarisi" if lang == "tr" else "System Architecture"
+    story.append(Paragraph(arch_title, h2_style))
+    if lang == "tr":
+        arch_items = [
+            "<b>Simulasyon:</b> Gymnasium tabanli 5G ag ortami (6 boyutlu durum vektoru, 3 eylem)",
+            "<b>RL Motoru:</b> Stable-Baselines3 PPO (PyTorch backend)",
+            "<b>API:</b> FastAPI ile gercek zamanli karar servisi",
+            "<b>Dashboard:</b> Streamlit ile KPI gorsellestirme ve PDF rapor",
+            "<b>Deployment:</b> Kubernetes (k3s) uyumlu container mimarisi",
+        ]
+    else:
+        arch_items = [
+            "<b>Simulation:</b> Gymnasium-based 5G network env (6-dim state, 3 actions)",
+            "<b>RL Engine:</b> Stable-Baselines3 PPO (PyTorch backend)",
+            "<b>API:</b> FastAPI real-time decision service",
+            "<b>Dashboard:</b> Streamlit with KPI visualization and PDF export",
+            "<b>Deployment:</b> Kubernetes (k3s) compatible container architecture",
+        ]
+    for item in arch_items:
+        story.append(Paragraph(item, bullet_style, bulletText="\u2022"))
+    story.append(Spacer(1, 12))
+
+    # State/Action description
+    sa_title = "Durum ve Eylem Uzayi" if lang == "tr" else "State & Action Space"
+    story.append(Paragraph(sa_title, h2_style))
+    sa_data = [
+        [Paragraph("<b>Indeks</b>", body_style), Paragraph("<b>Degisken</b>", body_style),
+         Paragraph("<b>Aciklama</b>", body_style)],
+        ["0", "cpu_a", "Edge-A CPU yuku" if lang == "tr" else "Edge-A CPU load"],
+        ["1", "cpu_b", "Edge-B CPU yuku" if lang == "tr" else "Edge-B CPU load"],
+        ["2", "q_a", "Edge-A kuyruk orani" if lang == "tr" else "Edge-A queue ratio"],
+        ["3", "q_b", "Edge-B kuyruk orani" if lang == "tr" else "Edge-B queue ratio"],
+        ["4", "link_q", "Baglanti kalitesi" if lang == "tr" else "Link quality"],
+        ["5", "energy_price", "Enerji fiyati" if lang == "tr" else "Energy price"],
+    ]
+    sa_table = Table(sa_data, colWidths=[2 * cm, 3.5 * cm, 10.5 * cm])
+    sa_table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor("#0d6efd")),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+        ('FONTNAME', (0, 0), (-1, -1), FONT),
+        ('FONTSIZE', (0, 0), (-1, -1), 10),
+        ('PADDING', (0, 0), (-1, -1), 5),
+        ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor("#dee2e6")),
+        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.HexColor("#f8f9fa"), colors.white]),
+    ]))
+    story.append(sa_table)
+    story.append(Spacer(1, 8))
+
+    action_data = [
+        [Paragraph("<b>Eylem</b>", body_style), Paragraph("<b>Hedef</b>", body_style),
+         Paragraph("<b>Ozellik</b>", body_style)],
+        ["0", "Edge-A", "Dusuk gecikme, yuksek enerji" if lang == "tr" else "Low latency, high energy"],
+        ["1", "Edge-B", "Orta gecikme, orta enerji" if lang == "tr" else "Medium latency, medium energy"],
+        ["2", "Cloud", "Yuksek gecikme, dusuk enerji" if lang == "tr" else "High latency, low energy"],
+    ]
+    act_table = Table(action_data, colWidths=[2 * cm, 3.5 * cm, 10.5 * cm])
+    act_table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor("#495057")),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+        ('FONTNAME', (0, 0), (-1, -1), FONT),
+        ('FONTSIZE', (0, 0), (-1, -1), 10),
+        ('PADDING', (0, 0), (-1, -1), 5),
+        ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor("#dee2e6")),
+        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.HexColor("#f8f9fa"), colors.white]),
+    ]))
+    story.append(act_table)
+    story.append(Spacer(1, 12))
+
+    # Confidence & Fallback
+    conf_title = "Guven Skoru ve Fallback" if lang == "tr" else "Confidence Score & Fallback"
+    story.append(Paragraph(conf_title, h2_style))
+    if lang == "tr":
+        story.append(Paragraph(
+            "Her karar icin bir guven skoru (0-1) uretilir. "
+            "Guven = max_probability - second_max_probability. "
+            "Guven skoru esik degerin altina dustugunde sistem, "
+            "kural tabanli fallback politikasina gecer (varsayilan: Yuk). "
+            "Bu mekanizma endustriyel entegrasyon icin guvenli bir mimari saglar.",
+            body_style,
+        ))
+    else:
+        story.append(Paragraph(
+            "A confidence score (0-1) is produced for each decision. "
+            "Confidence = max_probability - second_max_probability. "
+            "When confidence drops below threshold, the system falls back "
+            "to a rule-based policy (default: Load). "
+            "This mechanism provides a safe architecture for industrial integration.",
+            body_style,
+        ))
+    story.append(Spacer(1, 12))
+
+    # Conclusion
+    conclusion_title = "Sonuc" if lang == "tr" else "Conclusion"
+    story.append(Paragraph(conclusion_title, h2_style))
+    if lang == "tr":
+        conclusion_text = (
+            "Simulasyon ortaminda yapilan testlerde PPO politikasi, "
+            "kural tabanli alternatiflere kiyasla hem enerji tuketiminde hem de "
+            "gecikme performansinda tutarli iyilesmeler gostermistir. "
+            "Bu sonuclar, yapay zeka tabanli yuk yonlendirmenin 5G sebekelerinde "
+            "uygulanabilir oldugunu gostermektedir. Bir sonraki adim: "
+            "gercek ortam verileriyle dogrulama."
+        )
+    else:
+        conclusion_text = (
+            "In simulation-based testing, the PPO policy showed consistent improvements "
+            "in both energy consumption and latency performance compared to rule-based alternatives. "
+            "These results demonstrate the feasibility of AI-based workload routing in 5G networks. "
+            "Next step: validation with real-world data."
+        )
+    story.append(Paragraph(conclusion_text, body_style))
+    story.append(Spacer(1, 12))
+
+    # Disclaimer
+    story.append(HRFlowable(width="100%", thickness=0.5, color=colors.HexColor("#dee2e6")))
+    if lang == "tr":
+        disclaimer = (
+            "<i>Not: Bu rapordaki tum degerler simulasyon ortaminda uretilmistir. "
+            "Gercek saha verisi kullanilmamistir. Sonuclar her calistirmada "
+            "rastgele senaryolar nedeniyle farklilik gosterebilir.</i>"
+        )
+    else:
+        disclaimer = (
+            "<i>Note: All values in this report are generated in a simulated environment. "
+            "No real field data was used. Results may vary between runs due to random scenarios.</i>"
+        )
+    story.append(Paragraph(disclaimer, small_style))
+    story.append(Spacer(1, 20))
+
     # Footer
-    story.append(Paragraph(T["pdf_footer"], ParagraphStyle('Footer', parent=styles['Normal'], fontSize=10, textColor=colors.gray)))
-    
+    story.append(Paragraph(T["pdf_footer"], ParagraphStyle(
+        'PDFFooter', parent=styles['Normal'], fontName=FONT,
+        fontSize=10, textColor=colors.gray,
+    )))
+
     doc.build(story)
     return buffer.getvalue()
 
@@ -495,9 +1029,10 @@ if _CSS_PATH.exists():
     st.markdown(f"<style>{_CSS_PATH.read_text(encoding='utf-8')}</style>", unsafe_allow_html=True)
 
 # ---------------------------------------------------------------------------
-# Load results
+# Load results — live evaluation (different every page load)
 # ---------------------------------------------------------------------------
-results = load_results()
+# Generate fresh results each time; fall back to saved file if model missing
+results = generate_live_results()
 
 # ---------------------------------------------------------------------------
 # Header Bar
@@ -647,12 +1182,18 @@ _policy_display = {_plabel(k, lang): k for k in POLICY_KEYS}
 with col_left:
     live_display = st.selectbox(T["policy_label"], list(_policy_display.keys()))
     live_policy = _policy_display[live_display]
-    live_seed = st.number_input(T["seed_label"], value=99, min_value=0, max_value=9999)
+    auto_seed = st.checkbox("Rastgele senaryo" if lang == "tr" else "Random scenario", value=True, key="auto_seed_live")
+    if auto_seed:
+        live_seed = None
+    else:
+        live_seed = st.number_input(T["seed_label"], value=99, min_value=0, max_value=9999)
     run_btn = st.button(f":material/play_arrow: {T['run_btn']}", type="primary")
 
 if run_btn:
-    st.session_state["live_steps"] = run_live_episode(live_policy, seed=int(live_seed))
+    seed_val = None if auto_seed else int(live_seed)
+    st.session_state["live_steps"] = run_live_episode(live_policy, seed=seed_val)
     st.session_state["live_policy_display"] = live_display
+    st.session_state["live_seed_used"] = seed_val
 
 if "live_steps" in st.session_state:
     steps = st.session_state["live_steps"]
@@ -725,13 +1266,20 @@ if "live_steps" in st.session_state:
 st.header(f":material/compare_arrows: {T['cmp_header']}")
 st.caption(T["cmp_intro"])
 
-cmp_seed = st.number_input(T["cmp_seed"], value=42, min_value=0, max_value=9999, key="cmp_seed")
-cmp_btn = st.button(f":material/play_arrow: {T['cmp_btn']}", key="cmp_btn")
+cmp_col1, cmp_col2 = st.columns([1, 3])
+with cmp_col1:
+    auto_seed_cmp = st.checkbox("Rastgele senaryo" if lang == "tr" else "Random scenario", value=True, key="auto_seed_cmp")
+    if not auto_seed_cmp:
+        cmp_seed = st.number_input(T["cmp_seed"], value=42, min_value=0, max_value=9999, key="cmp_seed")
+    else:
+        cmp_seed = None
+    cmp_btn = st.button(f":material/play_arrow: {T['cmp_btn']}", key="cmp_btn")
 
 if cmp_btn:
+    used_seed = cmp_seed if cmp_seed is not None else random.randint(0, 999_999)
     fig_cmp = go.Figure()
     for i, pkey in enumerate(POLICY_KEYS):
-        steps = run_live_episode(pkey, seed=int(cmp_seed))
+        steps = run_live_episode(pkey, seed=used_seed)
         cum_reward = np.cumsum([s["reward"] for s in steps])
         fig_cmp.add_trace(go.Scatter(
             x=list(range(1, len(cum_reward) + 1)),

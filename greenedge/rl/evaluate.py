@@ -21,9 +21,12 @@ matplotlib.use("Agg")  # headless backend
 import matplotlib.pyplot as plt
 import numpy as np
 
+from greenedge.logging_config import get_logger
 from greenedge.rl.baselines import greedy_min_energy, greedy_min_latency, simple_threshold
 from greenedge.simulator.config import EnvConfig
 from greenedge.simulator.env import ACTION_LABELS, GreenEdgeEnv
+
+logger = get_logger("evaluate")
 
 # ---------------------------------------------------------------------------
 # Runner: play N episodes with a given policy function
@@ -86,11 +89,16 @@ def _load_sb3_policy(policy_path: str):
     for cls in (PPO, DQN):
         try:
             model = cls.load(policy_path)
+            logger.info(f"Loaded {cls.__name__} model from {policy_path}")
             def _predict(obs: np.ndarray, _m=model) -> int:
                 action, _ = _m.predict(obs, deterministic=True)
                 return int(action)
             return _predict
-        except Exception:
+        except FileNotFoundError:
+            logger.debug(f"Policy file not found for {cls.__name__}")
+            continue
+        except Exception as e:
+            logger.warning(f"Failed to load {cls.__name__}: {e}")
             continue
     raise RuntimeError(f"Could not load policy from {policy_path}")
 

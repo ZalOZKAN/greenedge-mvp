@@ -10,7 +10,7 @@ footer {visibility: hidden;}
 /* ---- Typography Scale ---- */
 /* Title (H1) — page title only */
 h1, .stMarkdown h1, [data-testid="stMarkdownContainer"] h1 {
-    font-size: 38px !important;
+    font-size: 42px !important;
     font-weight: 700 !important;
     margin-bottom: 0.5rem !important;
 }
@@ -18,7 +18,7 @@ h1, .stMarkdown h1, [data-testid="stMarkdownContainer"] h1 {
 /* Section heading (H2) — with accent underline */
 h2, .stMarkdown h2, [data-testid="stMarkdownContainer"] h2,
 [data-testid="stHeadingWithArrowContainer"] {
-    font-size: 29px !important;
+    font-size: 32px !important;
     font-weight: 600 !important;
     border-bottom: 2px solid #0d6efd;
     padding-bottom: 0.5rem;
@@ -28,34 +28,34 @@ h2, .stMarkdown h2, [data-testid="stMarkdownContainer"] h2,
 
 /* Card title / sub-heading (H3) */
 h3, .stMarkdown h3, [data-testid="stMarkdownContainer"] h3 {
-    font-size: 22px !important;
+    font-size: 24px !important;
     font-weight: 600 !important;
     margin-bottom: 0.8rem !important;
 }
 
 /* Body text */
 p, .stMarkdown p {
-    font-size: 14px !important;
-    line-height: 1.6 !important;
+    font-size: 15.5px !important;
+    line-height: 1.7 !important;
 }
 
 /* Small helper / caption text */
 .stCaption, small, .element-container small {
-    font-size: 12px !important;
+    font-size: 13px !important;
     color: #6c757d !important;
 }
 
 /* ---- KPI Cards — consistent height & spacing ---- */
 [data-testid="stMetricValue"] {
-    font-size: 24px !important;
+    font-size: 26px !important;
     font-weight: 700 !important;
 }
 [data-testid="stMetricLabel"] {
-    font-size: 13px !important;
+    font-size: 14px !important;
     font-weight: 500 !important;
 }
 [data-testid="stMetricDelta"] {
-    font-size: 11px !important;
+    font-size: 12px !important;
 }
 [data-testid="stMetric"] {
     background: #f8f9fa;
@@ -79,21 +79,21 @@ p, .stMarkdown p {
 
 /* ---- Tables ---- */
 .stDataFrame td, .stDataFrame th {
-    font-size: 13px !important;
+    font-size: 14px !important;
     padding: 8px !important;
 }
 
 /* ---- Buttons — consistent style ---- */
 .stButton button, .stDownloadButton button {
-    font-size: 12px !important;
-    padding: 0.4rem 0.8rem !important;
-    min-height: 36px !important;
+    font-size: 13px !important;
+    padding: 0.45rem 0.9rem !important;
+    min-height: 38px !important;
     border-radius: 6px !important;
 }
 
 /* ---- Info / alert boxes ---- */
 .stAlert p {
-    font-size: 13px !important;
+    font-size: 14px !important;
 }
 
 /* ---- Header bar ---- */
@@ -106,7 +106,7 @@ p, .stMarkdown p {
     border-bottom: 1px solid #e9ecef;
 }
 .header-left h1 { margin: 0 !important; }
-.header-left p { margin: 0 !important; color: #6c757d; font-size: 13px !important; }
+.header-left p { margin: 0 !important; color: #6c757d; font-size: 14px !important; }
 
 /* ---- Winner badge ---- */
 .winner-badge {
@@ -127,7 +127,7 @@ p, .stMarkdown p {
     padding: 1.2rem 1.5rem;
     border-radius: 0 8px 8px 0;
     margin: 1rem 0 1.5rem 0;
-    font-size: 14px !important;
+    font-size: 15.5px !important;
     line-height: 1.7 !important;
     color: #212529;
 }
@@ -137,9 +137,9 @@ p, .stMarkdown p {
 
 /* ---- Mobile / small screen safety (P2) ---- */
 @media (max-width: 768px) {
-    h1, .stMarkdown h1 { font-size: 28px !important; }
-    h2, .stMarkdown h2 { font-size: 22px !important; }
-    h3, .stMarkdown h3 { font-size: 18px !important; }
-    [data-testid="stMetricValue"] { font-size: 20px !important; }
+    h1, .stMarkdown h1 { font-size: 31px !important; }
+    h2, .stMarkdown h2 { font-size: 24px !important; }
+    h3, .stMarkdown h3 { font-size: 20px !important; }
+    [data-testid="stMetricValue"] { font-size: 22px !important; }
     [data-testid="stMetric"] { min-height: 90px; padding: 0.6rem; }
 }

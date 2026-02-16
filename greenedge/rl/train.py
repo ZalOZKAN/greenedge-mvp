@@ -16,8 +16,11 @@ from pathlib import Path
 
 import numpy as np
 
+from greenedge.logging_config import get_logger
 from greenedge.simulator.config import EnvConfig
 from greenedge.simulator.env import GreenEdgeEnv
+
+logger = get_logger("train")
 
 # ---------------------------------------------------------------------------
 # Gymnasium registration helper  (wraps our env so SB3 can use gym.make)
@@ -42,7 +45,7 @@ def train(algo: str, total_timesteps: int, out_dir: Path, seed: int = 42) -> Pat
     if algo not in ("ppo", "dqn"):
         raise ValueError(f"Unsupported algo '{algo}'. Choose ppo or dqn.")
 
-    print(f"[train] algo={algo}  steps={total_timesteps}  seed={seed}")
+    logger.info(f"Starting training: algo={algo}, steps={total_timesteps}, seed={seed}")
 
     # make_vec_env expects a callable
     vec_env = make_vec_env(lambda: _make_env(seed), n_envs=1, seed=seed)

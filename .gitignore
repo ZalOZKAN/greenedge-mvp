@@ -1,8 +1,34 @@
 # Python
 __pycache__/
 *.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+*.egg
+.eggs/
+dist/
+build/
+
+# Virtual environments
 .venv/
+venv/
+ENV/
+
+# Environment files
 .env
+
+# Pytest
+.pytest_cache/
+.coverage
+htmlcov/
+coverage.xml
+
+# Mypy
+.mypy_cache/
+
+# Ruff
+.ruff_cache/
 
 # Logs & outputs
 logs/
@@ -12,3 +38,13 @@ outputs/
 # OS / IDE
 .DS_Store
 .vscode/
+.idea/
+*.swp
+*.swo
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Experiments (optional - model files can be large)
+# experiments/*.zip
+# experiments/*.png

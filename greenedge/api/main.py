@@ -12,6 +12,7 @@ Endpoints:
 from __future__ import annotations
 
 import argparse
+import os
 from pathlib import Path
 from typing import List, Optional
 
@@ -19,9 +20,13 @@ import numpy as np
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 
+from greenedge.logging_config import get_logger
+from greenedge.settings import settings
 from greenedge.rl.baselines import greedy_min_latency
 from greenedge.simulator.config import EnvConfig
 from greenedge.simulator.env import ACTION_LABELS, GreenEdgeEnv
+
+logger = get_logger("api")
 
 # ---------------------------------------------------------------------------
 # Pydantic schemas
@@ -62,9 +67,28 @@ app = FastAPI(
     description="RL-based workload routing decisions for edge/cloud.",
 )
 
+# Add security middleware (rate limiting + optional API key auth)
+from starlette.middleware.base import BaseHTTPMiddleware
+from greenedge.api.security import create_security_middleware
+
+app.add_middleware(BaseHTTPMiddleware, dispatch=create_security_middleware())
+
+
+# Global exception handler
+@app.exception_handler(Exception)
+async def global_exception_handler(request, exc):
+    logger.error(f"Unhandled exception: {exc}", exc_info=True)
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Internal server error"},
+    )
+
+
+from starlette.responses import JSONResponse
+
 # Global state – loaded once at startup
 _model = None
-_confidence_threshold = 0.55
+_confidence_threshold = settings.api.confidence_threshold
 
 
 def _get_model():
@@ -81,9 +105,15 @@ def _get_model():
     for cls in (PPO, DQN):
         try:
             _model = cls.load(str(policy_path))
+            logger.info(f"Model loaded successfully: {cls.__name__}")
             return _model
-        except Exception:
+        except FileNotFoundError:
+            logger.debug(f"Policy file not found for {cls.__name__}")
             continue
+        except Exception as e:
+            logger.warning(f"Failed to load {cls.__name__}: {e}")
+            continue
+    logger.warning("No trained model available, using baseline policies")
     return None  # no model available → baselines only
 
 
@@ -166,13 +196,14 @@ def decision(body: ObservationIn):
 # CLI entry-point
 # ---------------------------------------------------------------------------
 
-def main():
+def main() -> None:
     parser = argparse.ArgumentParser(description="GreenEdge API server")
-    parser.add_argument("--host", default="127.0.0.1")
-    parser.add_argument("--port", type=int, default=8000)
+    parser.add_argument("--host", default=settings.api.host)
+    parser.add_argument("--port", type=int, default=settings.api.port)
     args = parser.parse_args()
 
     import uvicorn
+    logger.info(f"Starting API server on {args.host}:{args.port}")
     uvicorn.run(
         "greenedge.api.main:app",
         host=args.host,
