@@ -1,11 +1,11 @@
 {
-  "greedy_min_latency": {
-    "avg_reward": -18.0597,
-    "std_reward": 1.9809,
-    "avg_latency": 98.35,
-    "p95_latency": 121.59,
-    "avg_energy_per_mbps": 0.728,
-    "sla_violation_rate": 0.0579
+  "random_policy": {
+    "avg_reward": -27.2656,
+    "std_reward": 2.4029,
+    "avg_latency": 145.38,
+    "p95_latency": 208.51,
+    "avg_energy_per_mbps": 0.7724,
+    "sla_violation_rate": 0.554
   },
   "greedy_min_energy": {
     "avg_reward": -20.6119,
@@ -22,6 +22,22 @@
     "p95_latency": 130.44,
     "avg_energy_per_mbps": 0.7085,
     "sla_violation_rate": 0.1256
+  },
+  "greedy_min_latency": {
+    "avg_reward": -18.0597,
+    "std_reward": 1.9809,
+    "avg_latency": 98.35,
+    "p95_latency": 121.59,
+    "avg_energy_per_mbps": 0.728,
+    "sla_violation_rate": 0.0579
+  },
+  "weighted_heuristic": {
+    "avg_reward": -18.0661,
+    "std_reward": 1.8947,
+    "avg_latency": 98.91,
+    "p95_latency": 122.43,
+    "avg_energy_per_mbps": 0.7079,
+    "sla_violation_rate": 0.0672
   },
   "rl_ppo": {
     "avg_reward": -17.091,

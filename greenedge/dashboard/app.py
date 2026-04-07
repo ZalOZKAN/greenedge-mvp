@@ -649,7 +649,7 @@ def generate_pdf(results: dict, lang: str) -> bytes:
             [
                 Paragraph(f"<b><font color='#6c757d'>{l_eng}</font></b><br/><br/><font size=16 color='#212529'><b>{ppo_data.get('avg_energy_per_mbps', 0):.4f}</b></font>", body_style),
                 Paragraph(f"<b><font color='#6c757d'>{l_rew}</font></b><br/><br/><font size=16 color='#212529'><b>{ppo_data.get('avg_reward', 0):.2f}</b></font>", body_style),
-                Paragraph(f"<b><font color='#6c757d'>Model</font></b><br/><br/><font size=16 color='#212529'><b>PPO</b></font>", body_style)
+                Paragraph("<b><font color='#6c757d'>Model</font></b><br/><br/><font size=16 color='#212529'><b>PPO</b></font>", body_style)
             ]
         ]
         kpi_table = Table(kpi_data, colWidths=[5 * cm, 5 * cm, 5 * cm])
@@ -1245,7 +1245,7 @@ if "live_steps" in st.session_state:
     sla_rate = np.mean([s["sla_violation"] for s in steps])
 
     sla_color = "#198754" if sla_rate == 0 else ("#fd7e14" if sla_rate < 0.05 else "#dc3545")
-    
+
     html_str = f"""
 <div style="background-color: #f8f9fa; border: 1px solid #dee2e6; border-top: 4px solid #198754; border-radius: 8px; padding: 16px; margin: 16px 0; max-width: 100%; box-shadow: 0 2px 4px rgba(0,0,0,0.03);">
 <h4 style="margin: 0 0 12px 0; font-size: 13.5px; font-weight: 700; color: #495057; text-transform: uppercase;">{T['ep_done_title']}</h4>
@@ -1262,10 +1262,10 @@ if "live_steps" in st.session_state:
 """
 
     res_col1, res_col2 = st.columns([0.4, 0.6])
-    
+
     with res_col1:
         st.markdown(html_str, unsafe_allow_html=True)
-        
+
     with res_col2:
         t_vals = list(range(1, len(steps) + 1))
         latencies = [s["latency_ms"] for s in steps]

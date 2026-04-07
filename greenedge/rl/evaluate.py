@@ -1,12 +1,17 @@
 """Evaluate RL policy vs baselines and produce results + plots.
 
 Usage:
-    python -m greenedge.rl.evaluate --episodes 200
+    # Single seed (backward-compatible)
+    python -m greenedge.rl.evaluate --episodes 200 --seed 0
+
+    # Multi-seed robustness check (recommended for reports)
+    python -m greenedge.rl.evaluate --episodes 200 --seeds 0 42 123
 
 Outputs (under /experiments):
-    results.json        – per-policy metrics
-    plots_reward.png    – episode reward comparison
-    plots_tradeoff.png  – latency vs energy scatter (Pareto-style)
+    results.json          – per-policy metrics for the primary seed
+    results_summary.json  – per-seed + aggregate mean±std across all seeds
+    plots_reward.png      – episode reward comparison (primary seed)
+    plots_tradeoff.png    – latency vs energy scatter  (primary seed)
 """
 
 from __future__ import annotations
@@ -23,8 +28,16 @@ matplotlib.use("Agg")  # headless backend
 import matplotlib.pyplot as plt
 import numpy as np
 
+# Patch random_policy RNG so it uses the seed passed to run_episodes
+import greenedge.rl.baselines as _baselines_mod
 from greenedge.logging_config import get_logger
-from greenedge.rl.baselines import greedy_min_energy, greedy_min_latency, simple_threshold
+from greenedge.rl.baselines import (
+    greedy_min_energy,
+    greedy_min_latency,
+    random_policy,
+    simple_threshold,
+    weighted_heuristic,
+)
 from greenedge.simulator.config import EnvConfig
 from greenedge.simulator.env import GreenEdgeEnv
 
@@ -40,6 +53,9 @@ def run_episodes(
     seed: int = 0,
 ) -> dict[str, Any]:
     """Run *n_episodes* and collect KPI statistics."""
+    # Seed the random_policy RNG for reproducibility
+    _baselines_mod._rng = np.random.default_rng(seed)
+
     cfg = EnvConfig(seed=seed)
     env = GreenEdgeEnv(config=cfg)
 
@@ -132,8 +148,8 @@ def plot_tradeoff(results: dict[str, dict], out_path: Path) -> None:
     """Latency vs Energy scatter with avg + p95 markers."""
     fig, ax = plt.subplots(figsize=(8, 6))
 
-    colors = ["#2196F3", "#4CAF50", "#FF9800", "#E91E63"]
-    markers = ["o", "s", "^", "D"]
+    colors = ["#2196F3", "#4CAF50", "#FF9800", "#E91E63", "#9C27B0", "#795548"]
+    markers = ["o", "s", "^", "D", "P", "X"]
 
     for i, (name, data) in enumerate(results.items()):
         c = colors[i % len(colors)]
@@ -168,7 +184,116 @@ def plot_tradeoff(results: dict[str, dict], out_path: Path) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Main evaluate pipeline
+# Multi-seed aggregate summary
+# ---------------------------------------------------------------------------
+
+AGGREGATE_KEYS = [
+    "avg_reward", "std_reward", "avg_latency",
+    "p95_latency", "avg_energy_per_mbps", "sla_violation_rate",
+]
+
+
+def _aggregate(per_seed: list[dict]) -> dict[str, Any]:
+    """Compute mean and std across multiple seed runs for scalar KPIs."""
+    agg: dict[str, Any] = {}
+    for key in AGGREGATE_KEYS:
+        vals = [s[key] for s in per_seed if key in s]
+        if vals:
+            agg[f"{key}_mean"] = round(float(np.mean(vals)), 4)
+            agg[f"{key}_std"] = round(float(np.std(vals)), 4)
+    return agg
+
+
+def evaluate_multiseed(
+    n_episodes: int,
+    policy_path: str | None,
+    out_dir: Path,
+    seeds: list[int],
+) -> dict[str, Any]:
+    """Run all policies for each seed; save per-seed + aggregate summary."""
+
+    policies_base: dict[str, Callable[[np.ndarray], int]] = {
+        "random_policy": random_policy,
+        "greedy_min_energy": greedy_min_energy,
+        "simple_threshold": simple_threshold,
+        "greedy_min_latency": greedy_min_latency,
+        "weighted_heuristic": weighted_heuristic,
+    }
+
+    if policy_path and Path(policy_path).exists():
+        print(f"[eval] Loading RL policy from {policy_path}")
+        policies_base["rl_ppo"] = _load_sb3_policy(policy_path)
+    else:
+        print("[eval] No trained policy found – evaluating baselines only.")
+
+    # { policy_name: [seed0_stats, seed1_stats, ...] }
+    per_policy_per_seed: dict[str, list[dict]] = {name: [] for name in policies_base}
+
+    for seed in seeds:
+        print(f"\n[eval] === Seed {seed} ===")
+        for name, fn in policies_base.items():
+            print(f"[eval] Running {name} for {n_episodes} episodes (seed={seed}) …")
+            stats = run_episodes(fn, n_episodes, seed=seed)
+            per_policy_per_seed[name].append({"seed": seed, **stats})
+
+    # Build summary
+    summary: dict[str, Any] = {
+        "meta": {
+            "n_episodes": n_episodes,
+            "seeds": seeds,
+            "n_seeds": len(seeds),
+        },
+        "per_seed": {},
+        "aggregate": {},
+    }
+
+    for name, seed_results in per_policy_per_seed.items():
+        # strip episode_rewards from per_seed output to keep file small
+        summary["per_seed"][name] = [
+            {k: v for k, v in s.items() if k != "episode_rewards"}
+            for s in seed_results
+        ]
+        summary["aggregate"][name] = _aggregate(
+            [{k: v for k, v in s.items() if k != "episode_rewards"} for s in seed_results]
+        )
+
+    out_dir.mkdir(parents=True, exist_ok=True)
+    summary_path = out_dir / "results_summary.json"
+    with open(summary_path, "w", encoding="utf-8") as f:
+        json.dump(summary, f, indent=2, ensure_ascii=False)
+    print(f"\n[eval] Multi-seed summary -> {summary_path}")
+
+    # Print aggregate table
+    _print_aggregate_table(summary["aggregate"])
+
+    return summary
+
+
+def _print_aggregate_table(aggregate: dict[str, Any]) -> None:
+    """Pretty-print the mean±std aggregate table to stdout."""
+    print("\n" + "=" * 88)
+    print(f"  {'Policy':<22} {'AvgRew±std':>14} {'AvgLat±std':>14} {'P95Lat±std':>14} {'SLA%±std':>12}")
+    print("  " + "-" * 82)
+    for name, agg in aggregate.items():
+        rew_m = agg.get("avg_reward_mean", float("nan"))
+        rew_s = agg.get("avg_reward_std", 0.0)
+        lat_m = agg.get("avg_latency_mean", float("nan"))
+        lat_s = agg.get("avg_latency_std", 0.0)
+        p95_m = agg.get("p95_latency_mean", float("nan"))
+        p95_s = agg.get("p95_latency_std", 0.0)
+        sla_m = agg.get("sla_violation_rate_mean", float("nan")) * 100
+        sla_s = agg.get("sla_violation_rate_std", 0.0) * 100
+        print(
+            f"  {name:<22} {rew_m:>7.3f}±{rew_s:<5.2f} "
+            f"{lat_m:>7.2f}±{lat_s:<5.2f} "
+            f"{p95_m:>7.2f}±{p95_s:<5.2f} "
+            f"{sla_m:>5.1f}%±{sla_s:<4.1f}%"
+        )
+    print("=" * 88)
+
+
+# ---------------------------------------------------------------------------
+# Main evaluate pipeline (single seed, backward-compatible)
 # ---------------------------------------------------------------------------
 
 def evaluate(
@@ -177,12 +302,14 @@ def evaluate(
     out_dir: Path,
     seed: int = 0,
 ) -> dict[str, dict]:
-    """Run all policies and save results + plots."""
+    """Run all policies and save results + plots (single seed)."""
 
     policies: dict[str, Callable[[np.ndarray], int]] = {
-        "greedy_min_latency": greedy_min_latency,
+        "random_policy": random_policy,
         "greedy_min_energy": greedy_min_energy,
         "simple_threshold": simple_threshold,
+        "greedy_min_latency": greedy_min_latency,
+        "weighted_heuristic": weighted_heuristic,
     }
 
     # Load trained RL policy if available
@@ -240,7 +367,13 @@ def parse_args(argv=None):
                     help="Path to SB3 policy zip (default: experiments/policy.zip)")
     p.add_argument("--out", type=str, default=None,
                     help="Output dir (default: <repo>/experiments)")
-    p.add_argument("--seed", type=int, default=0)
+    p.add_argument("--seed", type=int, default=0,
+                    help="Primary seed (used when --seeds is not specified)")
+    p.add_argument(
+        "--seeds", type=int, nargs="+", default=None,
+        help="List of seeds for multi-seed evaluation (e.g. --seeds 0 42 123). "
+             "When specified, also writes results_summary.json.",
+    )
     return p.parse_args(argv)
 
 
@@ -255,12 +388,31 @@ def main(argv=None) -> None:
         if default.exists():
             policy_path = str(default)
 
-    evaluate(
-        n_episodes=args.episodes,
-        policy_path=policy_path,
-        out_dir=out_dir,
-        seed=args.seed,
-    )
+    seeds = args.seeds if args.seeds else None
+
+    if seeds and len(seeds) > 1:
+        # Multi-seed mode: run all seeds, write results_summary.json
+        evaluate_multiseed(
+            n_episodes=args.episodes,
+            policy_path=policy_path,
+            out_dir=out_dir,
+            seeds=seeds,
+        )
+        # Also run primary seed to update results.json and plots
+        evaluate(
+            n_episodes=args.episodes,
+            policy_path=policy_path,
+            out_dir=out_dir,
+            seed=seeds[0],
+        )
+    else:
+        primary_seed = seeds[0] if seeds else args.seed
+        evaluate(
+            n_episodes=args.episodes,
+            policy_path=policy_path,
+            out_dir=out_dir,
+            seed=primary_seed,
+        )
 
 
 if __name__ == "__main__":

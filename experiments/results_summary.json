@@ -1,0 +1,273 @@
+{
+  "meta": {
+    "n_episodes": 200,
+    "seeds": [
+      0,
+      42,
+      123
+    ],
+    "n_seeds": 3
+  },
+  "per_seed": {
+    "random_policy": [
+      {
+        "seed": 0,
+        "avg_reward": -27.2656,
+        "std_reward": 2.4029,
+        "avg_latency": 145.38,
+        "p95_latency": 208.51,
+        "avg_energy_per_mbps": 0.7724,
+        "sla_violation_rate": 0.554
+      },
+      {
+        "seed": 42,
+        "avg_reward": -27.6176,
+        "std_reward": 2.5784,
+        "avg_latency": 147.49,
+        "p95_latency": 210.21,
+        "avg_energy_per_mbps": 0.7713,
+        "sla_violation_rate": 0.5677
+      },
+      {
+        "seed": 123,
+        "avg_reward": -27.3624,
+        "std_reward": 2.3297,
+        "avg_latency": 146.78,
+        "p95_latency": 209.09,
+        "avg_energy_per_mbps": 0.7458,
+        "sla_violation_rate": 0.566
+      }
+    ],
+    "greedy_min_energy": [
+      {
+        "seed": 0,
+        "avg_reward": -20.6119,
+        "std_reward": 1.7497,
+        "avg_latency": 111.37,
+        "p95_latency": 178.02,
+        "avg_energy_per_mbps": 0.7023,
+        "sla_violation_rate": 0.2403
+      },
+      {
+        "seed": 42,
+        "avg_reward": -20.5986,
+        "std_reward": 1.8272,
+        "avg_latency": 111.39,
+        "p95_latency": 178.32,
+        "avg_energy_per_mbps": 0.6992,
+        "sla_violation_rate": 0.2407
+      },
+      {
+        "seed": 123,
+        "avg_reward": -20.529,
+        "std_reward": 1.8867,
+        "avg_latency": 111.4,
+        "p95_latency": 177.68,
+        "avg_energy_per_mbps": 0.6838,
+        "sla_violation_rate": 0.2446
+      }
+    ],
+    "simple_threshold": [
+      {
+        "seed": 0,
+        "avg_reward": -18.5975,
+        "std_reward": 1.6351,
+        "avg_latency": 100.63,
+        "p95_latency": 130.44,
+        "avg_energy_per_mbps": 0.7085,
+        "sla_violation_rate": 0.1256
+      },
+      {
+        "seed": 42,
+        "avg_reward": -18.695,
+        "std_reward": 1.6806,
+        "avg_latency": 100.66,
+        "p95_latency": 130.7,
+        "avg_energy_per_mbps": 0.7232,
+        "sla_violation_rate": 0.127
+      },
+      {
+        "seed": 123,
+        "avg_reward": -18.3867,
+        "std_reward": 1.7383,
+        "avg_latency": 100.4,
+        "p95_latency": 130.55,
+        "avg_energy_per_mbps": 0.6785,
+        "sla_violation_rate": 0.1249
+      }
+    ],
+    "greedy_min_latency": [
+      {
+        "seed": 0,
+        "avg_reward": -18.0597,
+        "std_reward": 1.9809,
+        "avg_latency": 98.35,
+        "p95_latency": 121.59,
+        "avg_energy_per_mbps": 0.728,
+        "sla_violation_rate": 0.0579
+      },
+      {
+        "seed": 42,
+        "avg_reward": -18.1045,
+        "std_reward": 1.9086,
+        "avg_latency": 98.32,
+        "p95_latency": 121.27,
+        "avg_energy_per_mbps": 0.7375,
+        "sla_violation_rate": 0.0567
+      },
+      {
+        "seed": 123,
+        "avg_reward": -17.8382,
+        "std_reward": 1.9745,
+        "avg_latency": 98.29,
+        "p95_latency": 121.19,
+        "avg_energy_per_mbps": 0.693,
+        "sla_violation_rate": 0.0562
+      }
+    ],
+    "weighted_heuristic": [
+      {
+        "seed": 0,
+        "avg_reward": -18.0661,
+        "std_reward": 1.8947,
+        "avg_latency": 98.91,
+        "p95_latency": 122.43,
+        "avg_energy_per_mbps": 0.7079,
+        "sla_violation_rate": 0.0672
+      },
+      {
+        "seed": 42,
+        "avg_reward": -18.1779,
+        "std_reward": 1.8731,
+        "avg_latency": 99.06,
+        "p95_latency": 122.89,
+        "avg_energy_per_mbps": 0.7197,
+        "sla_violation_rate": 0.0717
+      },
+      {
+        "seed": 123,
+        "avg_reward": -17.8971,
+        "std_reward": 1.9292,
+        "avg_latency": 98.94,
+        "p95_latency": 122.57,
+        "avg_energy_per_mbps": 0.6778,
+        "sla_violation_rate": 0.0677
+      }
+    ],
+    "rl_ppo": [
+      {
+        "seed": 0,
+        "avg_reward": -17.091,
+        "std_reward": 1.7164,
+        "avg_latency": 93.6,
+        "p95_latency": 107.61,
+        "avg_energy_per_mbps": 0.7225,
+        "sla_violation_rate": 0.0012
+      },
+      {
+        "seed": 42,
+        "avg_reward": -17.027,
+        "std_reward": 1.717,
+        "avg_latency": 93.56,
+        "p95_latency": 107.32,
+        "avg_energy_per_mbps": 0.7129,
+        "sla_violation_rate": 0.0009
+      },
+      {
+        "seed": 123,
+        "avg_reward": -16.9063,
+        "std_reward": 1.5841,
+        "avg_latency": 93.37,
+        "p95_latency": 106.6,
+        "avg_energy_per_mbps": 0.6968,
+        "sla_violation_rate": 0.0008
+      }
+    ]
+  },
+  "aggregate": {
+    "random_policy": {
+      "avg_reward_mean": -27.4152,
+      "avg_reward_std": 0.1485,
+      "std_reward_mean": 2.437,
+      "std_reward_std": 0.1044,
+      "avg_latency_mean": 146.55,
+      "avg_latency_std": 0.8766,
+      "p95_latency_mean": 209.27,
+      "p95_latency_std": 0.7056,
+      "avg_energy_per_mbps_mean": 0.7632,
+      "avg_energy_per_mbps_std": 0.0123,
+      "sla_violation_rate_mean": 0.5626,
+      "sla_violation_rate_std": 0.0061
+    },
+    "greedy_min_energy": {
+      "avg_reward_mean": -20.5798,
+      "avg_reward_std": 0.0364,
+      "std_reward_mean": 1.8212,
+      "std_reward_std": 0.0561,
+      "avg_latency_mean": 111.3867,
+      "avg_latency_std": 0.0125,
+      "p95_latency_mean": 178.0067,
+      "p95_latency_std": 0.2614,
+      "avg_energy_per_mbps_mean": 0.6951,
+      "avg_energy_per_mbps_std": 0.0081,
+      "sla_violation_rate_mean": 0.2419,
+      "sla_violation_rate_std": 0.0019
+    },
+    "simple_threshold": {
+      "avg_reward_mean": -18.5597,
+      "avg_reward_std": 0.1287,
+      "std_reward_mean": 1.6847,
+      "std_reward_std": 0.0422,
+      "avg_latency_mean": 100.5633,
+      "avg_latency_std": 0.1161,
+      "p95_latency_mean": 130.5633,
+      "p95_latency_std": 0.1066,
+      "avg_energy_per_mbps_mean": 0.7034,
+      "avg_energy_per_mbps_std": 0.0186,
+      "sla_violation_rate_mean": 0.1258,
+      "sla_violation_rate_std": 0.0009
+    },
+    "greedy_min_latency": {
+      "avg_reward_mean": -18.0008,
+      "avg_reward_std": 0.1164,
+      "std_reward_mean": 1.9547,
+      "std_reward_std": 0.0327,
+      "avg_latency_mean": 98.32,
+      "avg_latency_std": 0.0245,
+      "p95_latency_mean": 121.35,
+      "p95_latency_std": 0.1728,
+      "avg_energy_per_mbps_mean": 0.7195,
+      "avg_energy_per_mbps_std": 0.0191,
+      "sla_violation_rate_mean": 0.0569,
+      "sla_violation_rate_std": 0.0007
+    },
+    "weighted_heuristic": {
+      "avg_reward_mean": -18.047,
+      "avg_reward_std": 0.1154,
+      "std_reward_mean": 1.899,
+      "std_reward_std": 0.0231,
+      "avg_latency_mean": 98.97,
+      "avg_latency_std": 0.0648,
+      "p95_latency_mean": 122.63,
+      "p95_latency_std": 0.1925,
+      "avg_energy_per_mbps_mean": 0.7018,
+      "avg_energy_per_mbps_std": 0.0176,
+      "sla_violation_rate_mean": 0.0689,
+      "sla_violation_rate_std": 0.002
+    },
+    "rl_ppo": {
+      "avg_reward_mean": -17.0081,
+      "avg_reward_std": 0.0766,
+      "std_reward_mean": 1.6725,
+      "std_reward_std": 0.0625,
+      "avg_latency_mean": 93.51,
+      "avg_latency_std": 0.1003,
+      "p95_latency_mean": 107.1767,
+      "p95_latency_std": 0.4246,
+      "avg_energy_per_mbps_mean": 0.7107,
+      "avg_energy_per_mbps_std": 0.0106,
+      "sla_violation_rate_mean": 0.001,
+      "sla_violation_rate_std": 0.0002
+    }
+  }
+}
