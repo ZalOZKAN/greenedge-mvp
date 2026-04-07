@@ -7,7 +7,7 @@ End-to-end guide to run the full MVP demo on Windows (PowerShell).
 ## 0. Prerequisites
 
 ```powershell
-# Python 3.10+ required
+# Python 3.11+ required
 python --version
 
 # Install dependencies (one-time)

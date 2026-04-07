@@ -135,10 +135,11 @@ class GreenEdgeEnv(gym.Env):
         # --- reward ---
         latency_norm = latency_ms / 200.0
         energy_norm = energy / 3.0
+        sla_term = sla_violation * self.rw.sla_penalty_scale
         reward = -(
             self.rw.alpha * energy_norm
             + self.rw.beta * latency_norm
-            + self.rw.gamma * sla_violation
+            + self.rw.gamma * sla_term
         )
 
         terminated = self._t >= self.cfg.episode_length

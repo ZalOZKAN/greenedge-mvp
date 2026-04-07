@@ -1,6 +1,6 @@
 # GreenEdge-5G
 
-5G şebekelerinde enerji ve gecikmeyi birlikte optimize eden yapay zekâ tabanlı trafik yönetim sistemi.
+Private 5G kullanan akıllı fabrikalar, lojistik merkezleri ve düşük gecikme duyarlı endüstriyel edge ortamlarında enerji ve gecikmeyi birlikte optimize eden yapay zekâ tabanlı trafik yönetim sistemi.
 
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
 
@@ -8,7 +8,7 @@
 
 ## Hızlı Bakış
 
-GreenEdge-5G, 5G altyapılarında iş yükü yönlendirme kararlarını PPO (Proximal Policy Optimization) algoritması ile veren bir karar motorudur.
+GreenEdge-5G, dağıtık 5G Edge-Cloud altyapılarında iş yükü yönlendirme kararlarını PPO (Proximal Policy Optimization) algoritması ile veren (ve deneysel olarak DQN destekleyen) bir karar motorudur.
 
 **Temel Bileşenler:**
 - Deep Reinforcement Learning (PPO)
@@ -67,9 +67,9 @@ docker run -p 8000:8000 greenedge-5g:latest
 
 ## Problem Tanımı
 
-5G ağlarında sabit kurallı yönlendirme (en hızlı sunucu, CPU eşiği vb.) zamansal etkileri göz ardı eder. Art arda aynı sunucuya yönlendirme, SLA ihlallerine yol açabilir.
+Endüstriyel Private 5G ağlarında sabit kurallı yönlendirme (en hızlı sunucu, CPU eşiği vb.) zamansal etkileri göz ardı eder. Art arda aynı sunucuya yönlendirme, kaynak darboğazına ve kritik görevlerde SLA ihlallerine yol açabilir.
 
-GreenEdge-5G bu problemi MDP olarak modelleyerek dinamik optimizasyon sağlar.
+GreenEdge-5G bu problemi MDP olarak modelleyerek simülasyon ortamında dinamik optimizasyon sağlar.
 
 ---
 
@@ -102,9 +102,9 @@ Reward = – ( α × Energy_norm + β × Latency_norm + γ × SLA_penalty )
 
 | Parametre | Varsayılan | Açıklama |
 |-----------|------------|----------|
-| α (alpha) | 0.3 | Enerji ağırlığı |
-| β (beta) | 0.5 | Gecikme ağırlığı |
-| γ (gamma) | 0.2 | SLA ceza ağırlığı |
+| α (alpha) | 0.35 | Enerji ağırlığı |
+| β (beta) | 0.55 | Gecikme ağırlığı |
+| γ (gamma) | 0.10 | SLA ceza ağırlığı |
 
 ### Politika Karşılaştırması
 
@@ -117,12 +117,12 @@ Reward = – ( α × Energy_norm + β × Latency_norm + γ × SLA_penalty )
 
 ### Güven Skoru ve Fallback
 
-Her karar için güven skoru üretilir: `Güven = max_prob - second_max_prob`
+Her karar için güven skoru üretilir: `Güven = max_prob` (seçilen eylemin softmax olasılığı)
 
 | Durum | Aksiyon |
 |-------|---------|
 | Güven ≥ threshold | PPO kararı |
-| Güven < threshold | Fallback politikası (Yük) |
+| Güven < threshold | Fallback politikası (Hız — greedy_min_latency) |
 
 ---
 
@@ -134,17 +134,18 @@ Her karar için güven skoru üretilir: `Güven = max_prob - second_max_prob`
 
 ---
 
-## Sonuçlar (Simülasyon)
+## Sonuçlar (Simülasyon Ortamı)
 
-200 episode, ~10.000 karar adımı üzerinde:
+200 episode, ~10.000 karar adımı üzerinde (`experiments/results.json`):
 
-| Metrik | İyileşme |
-|--------|----------|
-| Ortalama enerji tüketimi | ≈ %18 azalma |
-| p95 gecikme | ≈ %12 azalma |
-| SLA ihlal oranı | ≈ %40 azalma |
+| Politika | Avg Reward | Avg Latency | P95 Latency | Energy/Mbps | SLA İhlal% |
+|----------|-----------|-------------|-------------|-------------|------------|
+| **rl_ppo** | **-17.09** | **93.60 ms** | **107.61 ms** | **0.722** | **%0.12** |
+| greedy_min_latency | -18.06 | 98.35 ms | 121.59 ms | 0.728 | %5.79 |
+| simple_threshold | -18.60 | 100.63 ms | 130.44 ms | 0.709 | %12.56 |
+| greedy_min_energy | -20.61 | 111.37 ms | 178.02 ms | 0.702 | %24.03 |
 
-*Klasik "en düşük gecikme" ve eşik tabanlı politikalara kıyasla*
+> **Not:** Sonuçlar simülasyon ortamında üretilmiştir. PPO modeli simüle edilmiş eğitim senaryoları sonucunda baseline algoritmalarına kıyasla karşılaştırmalı olarak daha iyi performans göstermiş ve SLA ihlallerini önemli ölçüde (%5.79'dan %0.12'ye) düşürmüştür. Tüm sonuçlar `python -m greenedge.rl.evaluate --episodes 200 --seed 0` komutuyla yeniden üretilebilir.
 
 ---
 

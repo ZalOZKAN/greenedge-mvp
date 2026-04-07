@@ -93,10 +93,21 @@ TEXTS = {
         "col_reward": "Ödül",
         "sla_ok": "✓",
         "sla_fail": "✗",
-        "ep_done_title": "SİMÜLASYON TAMAMLANDI",
-        "ep_done_detail": "Ödül: {reward:.2f} · Gecikme: {lat:.1f} ms · SLA İhlal: {sla:.1f}%",
+        "ep_done_title": "SİMÜLASYON (50 ADIM) TAMAMLANDI",
+        "ep_done_note": "Bu sonuçlar son çalıştırılan tek simülasyon senaryosuna aittir.",
+        "sim_running": "Simülasyon çalışıyor...",
+        "cmp_running": "Karşılaştırma yapılıyor...",
+        "eval_sub": "Genel Değerlendirme (200 episode)",
+        "eval_table_note": "Aşağıdaki kümülatif tablo, modele ait 200 rastgele test senaryosu (episode) üzerinden hesaplanan genel ortalama sonuçları göstermektedir.",
+        "tradeoff_note": "Bu grafik de yine 200 farklı test senaryosunun (episode) ortalamalarını temel alarak oluşmuştur.",
+        "lbl_policy": "Politika",
+        "lbl_total_steps": "Toplam Adım",
+        "lbl_tot_reward": "Toplam Ödül",
+        "lbl_avg_lat": "Ortalama Gecikme",
+        "lbl_avg_eng": "Ortalama Enerji",
+        "lbl_sla_rate": "SLA İhlal Oranı",
         "cmp_header": "Politika Karşılaştırması",
-        "cmp_intro": "Aynı senaryoda tüm politikaları karşılaştırın. Yükselen eğri = daha iyi.",
+        "cmp_intro": "Aynı senaryoda tüm politikaları karşılaştırın. Üstte kalan eğri (sıfıra yakın) = daha iyi performans.",
         "cmp_seed": "Senaryo No",
         "cmp_btn": "Karşılaştır",
         "cmp_title": "Kümülatif Ödül",
@@ -176,10 +187,21 @@ TEXTS = {
         "col_reward": "Reward",
         "sla_ok": "✓",
         "sla_fail": "✗",
-        "ep_done_title": "SIMULATION COMPLETE",
-        "ep_done_detail": "Reward: {reward:.2f} · Latency: {lat:.1f} ms · SLA Viol: {sla:.1f}%",
+        "ep_done_title": "SIMULATION (50 STEPS) COMPLETE",
+        "ep_done_note": "These results belong to the single simulation scenario just executed.",
+        "sim_running": "Simulation running...",
+        "cmp_running": "Running comparison...",
+        "eval_sub": "Overall Evaluation (200 episodes)",
+        "eval_table_note": "The table below shows the overall average results obtained across 200 random test scenarios (episodes).",
+        "tradeoff_note": "This chart is also based on the averages across 200 different test scenarios.",
+        "lbl_policy": "Policy",
+        "lbl_total_steps": "Total Steps",
+        "lbl_tot_reward": "Total Reward",
+        "lbl_avg_lat": "Avg Latency",
+        "lbl_avg_eng": "Avg Energy",
+        "lbl_sla_rate": "SLA Violation Rate",
         "cmp_header": "Policy Comparison",
-        "cmp_intro": "Compare all policies on same scenario. Rising curve = better.",
+        "cmp_intro": "Compare all policies on same scenario. Higher curve (closer to zero) = better performance.",
         "cmp_seed": "Scenario #",
         "cmp_btn": "Compare",
         "cmp_title": "Cumulative Reward",
@@ -297,10 +319,11 @@ def _quick_evaluate(policy_fn, n_episodes: int = 30, seed: int | None = None) ->
     }
 
 
+@st.cache_data
 def generate_live_results(seed: int | None = None) -> dict:
     """Run all 4 policies on fresh random scenarios and return results dict."""
     if seed is None:
-        seed = random.randint(0, 999_999)
+        seed = 42 # Use a fixed seed by default for consistent global results layout
 
     policy_fns = {
         "rl_ppo": _rl_predict,
@@ -311,7 +334,7 @@ def generate_live_results(seed: int | None = None) -> dict:
 
     results = {}
     for key, fn in policy_fns.items():
-        results[key] = _quick_evaluate(fn, n_episodes=30, seed=seed)
+        results[key] = _quick_evaluate(fn, n_episodes=200, seed=seed)
     return results
 
 
@@ -611,46 +634,32 @@ def generate_pdf(results: dict, lang: str) -> bytes:
             h2_style,
         ))
 
+        l_lat = "Ort. Gecikme" if lang == "tr" else "Avg Latency"
+        l_p95 = "P95 Gecikme" if lang == "tr" else "P95 Latency"
+        l_sla = "SLA Ihlal %" if lang == "tr" else "SLA Violation %"
+        l_eng = "Enerji/Mbps" if lang == "tr" else "Energy/Mbps"
+        l_rew = "Ort. Odul" if lang == "tr" else "Avg Reward"
+
         kpi_data = [
-            [Paragraph("<b>Metrik</b>", body_style), Paragraph("<b>Deger</b>", body_style),
-             Paragraph("<b>Hedef</b>", body_style)],
             [
-                "Ort. Gecikme" if lang == "tr" else "Avg Latency",
-                f"{ppo_data.get('avg_latency', 0):.1f} ms",
-                "< 80 ms",
+                Paragraph(f"<b><font color='#6c757d'>{l_lat}</font></b><br/><br/><font size=16 color='#212529'><b>{ppo_data.get('avg_latency', 0):.1f} ms</b></font>", body_style),
+                Paragraph(f"<b><font color='#6c757d'>{l_p95}</font></b><br/><br/><font size=16 color='#212529'><b>{ppo_data.get('p95_latency', 0):.1f} ms</b></font>", body_style),
+                Paragraph(f"<b><font color='#6c757d'>{l_sla}</font></b><br/><br/><font size=16 color='#212529'><b>{ppo_data.get('sla_violation_rate', 0) * 100:.1f}%</b></font>", body_style)
             ],
             [
-                "P95 Gecikme" if lang == "tr" else "P95 Latency",
-                f"{ppo_data.get('p95_latency', 0):.1f} ms",
-                f"< {cfg.sla_ms} ms",
-            ],
-            [
-                "Enerji/Mbps" if lang == "tr" else "Energy/Mbps",
-                f"{ppo_data.get('avg_energy_per_mbps', 0):.4f}",
-                "< 0.50",
-            ],
-            [
-                "SLA Ihlal %" if lang == "tr" else "SLA Violation %",
-                f"{ppo_data.get('sla_violation_rate', 0) * 100:.1f}%",
-                "< 5%",
-            ],
-            [
-                "Ort. Odul" if lang == "tr" else "Avg Reward",
-                f"{ppo_data.get('avg_reward', 0):.2f}",
-                "Maksimize",
-            ],
+                Paragraph(f"<b><font color='#6c757d'>{l_eng}</font></b><br/><br/><font size=16 color='#212529'><b>{ppo_data.get('avg_energy_per_mbps', 0):.4f}</b></font>", body_style),
+                Paragraph(f"<b><font color='#6c757d'>{l_rew}</font></b><br/><br/><font size=16 color='#212529'><b>{ppo_data.get('avg_reward', 0):.2f}</b></font>", body_style),
+                Paragraph(f"<b><font color='#6c757d'>Model</font></b><br/><br/><font size=16 color='#212529'><b>PPO</b></font>", body_style)
+            ]
         ]
-        kpi_table = Table(kpi_data, colWidths=[6 * cm, 5 * cm, 5 * cm])
+        kpi_table = Table(kpi_data, colWidths=[5 * cm, 5 * cm, 5 * cm])
         kpi_table.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor("#0d6efd")),
-            ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
-            ('FONTNAME', (0, 0), (-1, -1), FONT),
-            ('FONTNAME', (0, 0), (-1, 0), FONT_BOLD),
-            ('FONTSIZE', (0, 0), (-1, -1), 11),
-            ('PADDING', (0, 0), (-1, -1), 8),
-            ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor("#dee2e6")),
-            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.HexColor("#f8f9fa"), colors.white]),
-            ('ALIGN', (1, 1), (-1, -1), 'CENTER'),
+            ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor("#f8f9fa")),
+            ('GRID', (0, 0), (-1, -1), 2, colors.white),
+            ('BOX', (0, 0), (-1, -1), 1, colors.HexColor("#e9ecef")),
+            ('PADDING', (0, 0), (-1, -1), 12),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
         ]))
         story.append(kpi_table)
         story.append(Spacer(1, 16))
@@ -1005,10 +1014,17 @@ def generate_pdf(results: dict, lang: str) -> bytes:
 # ---------------------------------------------------------------------------
 st.set_page_config(
     page_title="GreenEdge-5G",
-    page_icon=":material/bolt:",
+    page_icon="⚡",
     layout="wide",
     initial_sidebar_state="collapsed",
 )
+
+if "first_page_load" not in st.session_state:
+    st.components.v1.html(
+        "<script>window.parent.document.querySelector('.main').scrollTo(0,0); window.parent.scrollTo(0,0);</script>",
+        height=0,
+    )
+    st.session_state["first_page_load"] = True
 
 # ---------------------------------------------------------------------------
 # Sidebar: language switch
@@ -1073,40 +1089,11 @@ st.markdown(f'<div class="story-panel">{T["story_panel"]}</div>', unsafe_allow_h
 # 1) KPI Cards — Evaluation Summary
 # ---------------------------------------------------------------------------
 if results:
-    st.header(f":material/analytics: {T['eval_header']}")
 
-    # Intro text - always visible
-    st.markdown(T["eval_info_content"])
-    st.markdown(T["terms_explain"])
-
-    highlight = results.get("rl_ppo", next(iter(results.values())))
-    rl_key = "rl_ppo" if "rl_ppo" in results else list(results.keys())[0]
-
-    # KPI Cards with target hints
-    cols = st.columns(4)
-    cols[0].metric(
-        T["avg_latency"],
-        f"{highlight['avg_latency']:.1f} ms",
-    )
-    cols[1].metric(
-        T["p95_latency"],
-        f"{highlight['p95_latency']:.1f} ms",
-        delta=T["target_label"].format(val="120 ms"),
-        delta_color="off",
-    )
-    cols[2].metric(
-        T["energy_mbps"],
-        f"{highlight['avg_energy_per_mbps']:.4f}",
-    )
-    cols[3].metric(
-        T["sla_viol"],
-        f"{highlight['sla_violation_rate']*100:.1f}%",
-        delta=T["target_label"].format(val="<5%"),
-        delta_color="off",
-    )
 
     # ---- Comparison table ----
     st.subheader(T["comparison"])
+    st.info(T["eval_table_note"])
 
     # Find the winner
     winner_key = max(results.keys(), key=lambda k: results[k]["avg_reward"])
@@ -1140,6 +1127,7 @@ if results:
 
     # ---- Trade-off scatter ----
     st.subheader(T["tradeoff_title"])
+    st.info(T["tradeoff_note"])
     fig_trade = go.Figure()
     for i, name in enumerate(POLICY_KEYS):
         if name not in results:
@@ -1174,36 +1162,111 @@ else:
     st.warning(T["no_results"])
 
 # ---------------------------------------------------------------------------
+# 3) RL vs Baseline comparison
+# ---------------------------------------------------------------------------
+st.header(f"⇄ {T['cmp_header']}")
+st.caption(T["cmp_intro"])
+
+cmp_col1, cmp_col2 = st.columns([1, 3])
+with cmp_col1:
+    auto_seed_cmp = st.checkbox("Rastgele senaryo" if lang == "tr" else "Random scenario", value=True, key="auto_seed_cmp")
+    if not auto_seed_cmp:
+        cmp_seed = st.number_input(T["cmp_seed"], value=42, min_value=0, max_value=9999, key="cmp_seed")
+    else:
+        cmp_seed = None
+    cmp_btn = st.button(f"▶ {T['cmp_btn']}", key="cmp_btn")
+
+if cmp_btn:
+    with st.spinner(T["cmp_running"]):
+        used_seed = cmp_seed if cmp_seed is not None else random.randint(0, 999_999)
+        fig_cmp = go.Figure()
+        for i, pkey in enumerate(POLICY_KEYS):
+            steps = run_live_episode(pkey, seed=used_seed)
+            cum_reward = np.cumsum([s["reward"] for s in steps])
+            fig_cmp.add_trace(go.Scatter(
+                x=list(range(1, len(cum_reward) + 1)),
+                y=cum_reward.tolist(),
+                mode="lines",
+                name=_plabel(pkey, lang),
+                line={"color": POLICY_COLORS[i], "width": 2.5},
+            ))
+
+        fig_cmp.update_layout(
+            title={"text": T["cmp_title"], "font": {"size": 14}},
+            xaxis={"title": {"text": T["cmp_x"], "font": {"size": AXIS_FONT_SIZE}},
+                       "tickfont": {"size": TICK_FONT_SIZE}},
+            yaxis={"title": {"text": T["cmp_y"], "font": {"size": AXIS_FONT_SIZE}},
+                       "tickfont": {"size": TICK_FONT_SIZE}},
+            font=CHART_FONT,
+            legend={"font": {"size": 12}},
+            height=400,
+            margin={"t": 40, "b": 50},
+            plot_bgcolor="#fafafa",
+        )
+        st.plotly_chart(fig_cmp, use_container_width=True)
+
+# ---------------------------------------------------------------------------
 # 2) Live simulation
 # ---------------------------------------------------------------------------
-st.header(f":material/play_circle: {T['live_header']}")
+st.header(f"▶ {T['live_header']}")
 st.caption(T["live_intro"])
-
-col_left, col_right = st.columns([1, 3])
 
 _policy_display = {_plabel(k, lang): k for k in POLICY_KEYS}
 
-with col_left:
+# Controls horizontally aligned
+ctrl_col1, ctrl_col2, ctrl_col3 = st.columns([1.5, 1, 1])
+with ctrl_col1:
     live_display = st.selectbox(T["policy_label"], list(_policy_display.keys()))
     live_policy = _policy_display[live_display]
-    auto_seed = st.checkbox("Rastgele senaryo" if lang == "tr" else "Random scenario", value=True, key="auto_seed_live")
+with ctrl_col2:
+    st.markdown("<div style='margin-top: 30px;'></div>", unsafe_allow_html=True)
+    auto_seed = st.checkbox("Rastgele Senaryo Numarası" if lang == "tr" else "Random Scenario Number", value=True, key="auto_seed_live")
     if auto_seed:
         live_seed = None
     else:
-        live_seed = st.number_input(T["seed_label"], value=99, min_value=0, max_value=9999)
-    run_btn = st.button(f":material/play_arrow: {T['run_btn']}", type="primary")
+        live_seed = st.number_input(T["seed_label"], value=99, min_value=0, max_value=9999, label_visibility="collapsed")
+with ctrl_col3:
+    st.markdown("<div style='margin-top: 30px;'></div>", unsafe_allow_html=True)
+    run_btn = st.button(f"▶ {T['run_btn']}", type="primary", use_container_width=True)
 
 if run_btn:
     seed_val = None if auto_seed else int(live_seed)
-    st.session_state["live_steps"] = run_live_episode(live_policy, seed=seed_val)
-    st.session_state["live_policy_display"] = live_display
-    st.session_state["live_seed_used"] = seed_val
+    with st.spinner(T["sim_running"]):
+        st.session_state["live_steps"] = run_live_episode(live_policy, seed=seed_val)
+        st.session_state["live_policy_display"] = live_display
+        st.session_state["live_seed_used"] = seed_val
 
 if "live_steps" in st.session_state:
     steps = st.session_state["live_steps"]
     live_display_saved = st.session_state.get("live_policy_display", live_display)
+    total_reward = sum(s["reward"] for s in steps)
+    avg_lat = np.mean([s["latency_ms"] for s in steps])
+    avg_eng = np.mean([s["energy_per_mbps"] for s in steps])
+    sla_rate = np.mean([s["sla_violation"] for s in steps])
 
-    with col_right:
+    sla_color = "#198754" if sla_rate == 0 else ("#fd7e14" if sla_rate < 0.05 else "#dc3545")
+    
+    html_str = f"""
+<div style="background-color: #f8f9fa; border: 1px solid #dee2e6; border-top: 4px solid #198754; border-radius: 8px; padding: 16px; margin: 16px 0; max-width: 100%; box-shadow: 0 2px 4px rgba(0,0,0,0.03);">
+<h4 style="margin: 0 0 12px 0; font-size: 13.5px; font-weight: 700; color: #495057; text-transform: uppercase;">{T['ep_done_title']}</h4>
+<div style="font-size: 13px; color: #212529; display: flex; flex-wrap: wrap; gap: 10px;">
+<div style="flex: 1 1 45%; border-bottom: 1px solid #e9ecef; padding-bottom: 4px;"><span style="color: #6c757d; font-size: 12px;">{T['lbl_policy']}</span><br><span style="font-weight: 600;">{live_display_saved}</span></div>
+<div style="flex: 1 1 45%; border-bottom: 1px solid #e9ecef; padding-bottom: 4px;"><span style="color: #6c757d; font-size: 12px;">{T['lbl_total_steps']}</span><br><span style="font-weight: 600;">{len(steps)}</span></div>
+<div style="flex: 1 1 45%; border-bottom: 1px solid #e9ecef; padding-bottom: 4px;"><span style="color: #6c757d; font-size: 12px;">{T['lbl_tot_reward']}</span><br><span style="font-weight: 600;">{total_reward:.2f}</span></div>
+<div style="flex: 1 1 45%; border-bottom: 1px solid #e9ecef; padding-bottom: 4px;"><span style="color: #6c757d; font-size: 12px;">{T['lbl_avg_lat']}</span><br><span style="font-weight: 600; color: #0d6efd;">{avg_lat:.1f} ms</span></div>
+<div style="flex: 1 1 45%; padding-bottom: 4px;"><span style="color: #6c757d; font-size: 12px;">{T['lbl_avg_eng']}</span><br><span style="font-weight: 600; color: #fd7e14;">{avg_eng:.4f}</span></div>
+<div style="flex: 1 1 45%; padding-bottom: 4px;"><span style="color: #6c757d; font-size: 12px;">{T['lbl_sla_rate']}</span><br><span style="font-weight: 700; color: {sla_color};">{sla_rate * 100:.1f}%</span></div>
+</div>
+<div style="margin-top: 12px; padding-top: 10px; border-top: 1px solid #e9ecef; font-size: 11px; color: #adb5bd; font-style: italic;">{T['ep_done_note']}</div>
+</div>
+"""
+
+    res_col1, res_col2 = st.columns([0.4, 0.6])
+    
+    with res_col1:
+        st.markdown(html_str, unsafe_allow_html=True)
+        
+    with res_col2:
         t_vals = list(range(1, len(steps) + 1))
         latencies = [s["latency_ms"] for s in steps]
         energies = [s["energy_per_mbps"] for s in steps]
@@ -1252,57 +1315,3 @@ if "live_steps" in st.session_state:
             T["col_reward"]: f"{s['reward']:.3f}",
         })
     st.dataframe(pd.DataFrame(table_data), use_container_width=True, hide_index=True)
-
-    total_reward = sum(s["reward"] for s in steps)
-    avg_lat = np.mean([s["latency_ms"] for s in steps])
-    sla_rate = np.mean([s["sla_violation"] for s in steps])
-
-    st.markdown(f"""
-    <div style="background: linear-gradient(135deg, #28a745, #218838); color: white; padding: 1rem 1.5rem; border-radius: 10px; text-align: center; margin: 1rem 0;">
-        <h3 style="margin: 0 0 0.3rem 0; font-size: 16px; font-weight: 600;">{T['ep_done_title']}</h3>
-        <p style="margin: 0; font-size: 14px;">{T['ep_done_detail'].format(reward=total_reward, lat=avg_lat, sla=sla_rate * 100)}</p>
-    </div>
-    """, unsafe_allow_html=True)
-
-# ---------------------------------------------------------------------------
-# 3) RL vs Baseline comparison
-# ---------------------------------------------------------------------------
-st.header(f":material/compare_arrows: {T['cmp_header']}")
-st.caption(T["cmp_intro"])
-
-cmp_col1, cmp_col2 = st.columns([1, 3])
-with cmp_col1:
-    auto_seed_cmp = st.checkbox("Rastgele senaryo" if lang == "tr" else "Random scenario", value=True, key="auto_seed_cmp")
-    if not auto_seed_cmp:
-        cmp_seed = st.number_input(T["cmp_seed"], value=42, min_value=0, max_value=9999, key="cmp_seed")
-    else:
-        cmp_seed = None
-    cmp_btn = st.button(f":material/play_arrow: {T['cmp_btn']}", key="cmp_btn")
-
-if cmp_btn:
-    used_seed = cmp_seed if cmp_seed is not None else random.randint(0, 999_999)
-    fig_cmp = go.Figure()
-    for i, pkey in enumerate(POLICY_KEYS):
-        steps = run_live_episode(pkey, seed=used_seed)
-        cum_reward = np.cumsum([s["reward"] for s in steps])
-        fig_cmp.add_trace(go.Scatter(
-            x=list(range(1, len(cum_reward) + 1)),
-            y=cum_reward.tolist(),
-            mode="lines",
-            name=_plabel(pkey, lang),
-            line={"color": POLICY_COLORS[i], "width": 2.5},
-        ))
-
-    fig_cmp.update_layout(
-        title={"text": T["cmp_title"], "font": {"size": 14}},
-        xaxis={"title": {"text": T["cmp_x"], "font": {"size": AXIS_FONT_SIZE}},
-                   "tickfont": {"size": TICK_FONT_SIZE}},
-        yaxis={"title": {"text": T["cmp_y"], "font": {"size": AXIS_FONT_SIZE}},
-                   "tickfont": {"size": TICK_FONT_SIZE}},
-        font=CHART_FONT,
-        legend={"font": {"size": 12}},
-        height=400,
-        margin={"t": 40, "b": 50},
-        plot_bgcolor="#fafafa",
-    )
-    st.plotly_chart(fig_cmp, use_container_width=True)

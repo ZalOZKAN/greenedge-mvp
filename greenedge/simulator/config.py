@@ -9,11 +9,12 @@ from dataclasses import dataclass, field
 class RewardWeights:
     """Coefficients for the multi-objective reward function.
 
-    reward = -(alpha * energy_norm + beta * latency_norm + gamma * sla_penalty)
+    reward = -(alpha * energy_norm + beta * latency_norm + gamma * sla_penalty * sla_penalty_scale)
     """
-    alpha: float = 0.35   # energy weight
-    beta: float = 0.55    # latency weight
-    gamma: float = 0.10   # SLA violation penalty weight
+    alpha: float = 0.35             # energy weight
+    beta: float = 0.55              # latency weight
+    gamma: float = 0.10             # SLA violation penalty weight
+    sla_penalty_scale: float = 1.0  # multiplier on SLA penalty (1=binary, 3=×3, 5=×5…)
 
 
 @dataclass

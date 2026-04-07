@@ -24,11 +24,11 @@
     "sla_violation_rate": 0.1256
   },
   "rl_ppo": {
-    "avg_reward": -17.4108,
-    "std_reward": 1.6413,
-    "avg_latency": 95.15,
-    "p95_latency": 107.97,
-    "avg_energy_per_mbps": 0.7403,
-    "sla_violation_rate": 0.0018
+    "avg_reward": -17.091,
+    "std_reward": 1.7164,
+    "avg_latency": 93.6,
+    "p95_latency": 107.61,
+    "avg_energy_per_mbps": 0.7225,
+    "sla_violation_rate": 0.0012
   }
 }
