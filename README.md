@@ -5,13 +5,48 @@
 [![CI](https://github.com/ZalOZKAN/greenedge-mvp/actions/workflows/ci.yml/badge.svg)](https://github.com/ZalOZKAN/greenedge-mvp/actions/workflows/ci.yml)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
 
+<table width="100%">
+   <tr>
+      <td width="74%" valign="top" style="border:1px solid #30363d; border-radius:8px; padding:14px 16px;">
+         <h2>🚀 What is GreenEdge-5G?</h2>
+         <p>GreenEdge-5G is an AI-powered decision engine that optimizes workload routing in 5G edge-cloud systems.</p>
+         <p>Instead of static rules, it uses PPO-based Deep Reinforcement Learning to reduce SLA violations and improve system stability by learning from dynamic network conditions in the simulation setting.</p>
+      </td>
+      <td width="26%" valign="top" align="center" style="border:1px solid #30363d; border-radius:8px; padding:14px 10px;">
+         <strong></strong><br/><br/>
+         <img src="docs/images/logo.png" alt="GreenEdge-5G Logo" width="140" />
+      </td>
+   </tr>
+</table>
+
+## 💡 Why it matters
+
+- SLA violations can disrupt critical operations in industrial 5G networks
+- Static routing fails under dynamic workloads
+- Edge resources are limited and expensive
+
+GreenEdge enables adaptive, learning-based decision making.
+
+Result:
+→ more stable systems
+→ fewer SLA violations
+→ better resource utilization
+
+---
+
+## 📌 Scope of the Project
+
+GreenEdge-5G focuses on the decision-making layer of edge-cloud routing.
+
+It is not a full 5G network stack, but a modular decision engine that can be integrated into existing systems.
+
 ---
 
 ## 1. Problem
 
 In industrial Private 5G networks (smart factories, logistics hubs, low-latency edge deployments), fixed-rule routing — "always pick fastest server" or "always pick cheapest" — ignores temporal dynamics. Repeatedly routing to the same node causes resource saturation and SLA violations under variable load.
 
-**GreenEdge-5G** models this as a Markov Decision Process and solves it with Proximal Policy Optimization (PPO), enabling the agent to learn a routing policy that balances **latency**, **energy consumption**, and **SLA compliance** simultaneously.
+**GreenEdge-5G** models this as a Markov Decision Process and solves it with Proximal Policy Optimization (PPO), enabling the agent to learn a routing policy that balances **latency**, **energy consumption**, and **SLA compliance** simultaneously in the simulation setting.
 
 ---
 
@@ -25,11 +60,20 @@ A RL-based decision engine trained in a lightweight Gymnasium simulation of a 3-
 | Edge-B | Medium base (30 ms) + load-dependent | Medium per-Mbps |
 | Cloud | High base (65 ms) + WAN jitter | Lowest per-Mbps |
 
-The trained PPO agent observes a 6-dimensional state vector and selects the optimal routing target at each decision step.
+The trained PPO agent observes a 6-dimensional state vector and selects a more favorable routing target at each decision step.
 
 ---
 
 ## 3. Architecture
+
+## 🏗️ System Architecture
+![Architecture](docs/images/architecture.png)
+
+## 📊 Results Overview
+![Results](experiments/plots_tradeoff.png)
+
+## 📺 Dashboard
+![Dashboard](docs/images/dashboard.png)
 
 ```
                   ┌──────────┐
@@ -99,7 +143,7 @@ r = –( α × E_norm + β × L_norm + γ × SLA_scale × 𝟙_SLA )
 **Why this formulation?**
 - **β > α**: Latency is the primary SLA driver in 5G edge use cases; β is deliberately higher.
 - **Binary SLA penalty (γ)**: The SLA boundary (120 ms) is a hard operational constraint. A discrete penalty encourages the agent to stay away from the boundary rather than trading off marginally.
-- **Weights were tuned** via systematic grid search across α∈{0.3,0.35,0.4}, β∈{0.5,0.55,0.6}, SLA_scale∈{1,3,5}; the chosen set produced the best SLA violation rate without sacrificing latency stability.
+- **Weights were tuned** via systematic grid search across α∈{0.3,0.35,0.4}, β∈{0.5,0.55,0.6}, SLA_scale∈{1,3,5}; the chosen set produced the lowest observed SLA violation rate without sacrificing latency stability in the simulation setting.
 
 ### Confidence Score & Fallback
 
@@ -116,6 +160,21 @@ If `confidence < threshold`, the system falls back to the `greedy_min_latency` h
 > ⚠️ **All results are produced in a simulated environment.** No real 5G field measurements were used. The simulation models node load dynamics, latency, and energy with simplified abstractions.
 >
 > *Multi-seed mean ± std is the primary reported metric for stability claims. Single-seed (seed=0) results are used for reproducible demos and dashboard display.*
+
+### 5.0 Metrics at a Glance
+
+SLA violation:
+- PPO: 0.10% ± 0.02%
+- Baseline: ~5.7%
+
+Latency (P95):
+- PPO: ~107 ms
+
+Note:
+Multi-seed evaluation is used to demonstrate stability.
+Single-seed results are used for dashboard demos.
+
+Energy per Mbps represents a normalized energy cost per unit of processed data in the simulation.
 
 ### 5.1 Primary Evaluation (seed=0) — 200 episodes, ~10 000 decision steps
 
@@ -149,9 +208,15 @@ Used to demonstrate result stability across different environment initialisation
 
 *Source: `experiments/results_summary.json` — reproduced via `make multiseed`*
 
-**Key findings (in the simulation setting):**
-- **SLA violation rate — PPO: 0.10% ± 0.02%** vs greedy_min_latency: 5.69% ± 0.07%.
-  - **48× reduction** in SLA violation rate vs `greedy_min_latency` (seed=0: 0.12% vs 5.79%; calculation: 5.79 ÷ 0.12 = 48×).
+### Key findings (in the simulation setting)
+
+SLA violation rate (multi-seed):
+- PPO: 0.10% ± 0.02%
+- greedy_min_latency: 5.69% ± 0.07%
+
+Approximate improvement:
+- ~48× reduction in SLA violations compared to greedy_min_latency
+- based on single-seed evaluation (0.12% vs 5.79%)
 - **P95 latency: 107.18 ± 0.42 ms** — consistently below the 120 ms SLA threshold across all seeds.
 - **Latency mean: 93.51 ± 0.10 ms** — lower than greedy_min_latency (98.32 ms) while also using less energy (0.71 vs 0.72 Energy/Mbps), indicating a more favourable latency-energy trade-off in this simulation setup.
 - **Stability:** SLA violation std of ±0.02 pp across seeds confirms the policy is not sensitive to environment initialisation.
@@ -166,13 +231,15 @@ python -m greenedge.rl.evaluate --episodes 200 --seeds 0 42 123
 
 ---
 
-## 6. Limitations
+## ⚠️ Limitations
 
-- **Simulation-only validation:** The system has been validated exclusively in the Gymnasium-based simulator. Real-world 5G field deployment has not been performed.
-- **Simplified latency/energy models:** The environment uses physics-inspired abstractions; actual node behaviour may differ due to OS scheduling, hardware heterogeneity, and network stack overhead.
-- **Static topology:** The current simulator uses a fixed 2-edge + 1-cloud topology. Scaling to dynamic, multi-cluster topologies is future work.
-- **No adversarial scenarios:** Fault injection (node failure, link outage) has not been systematically validated.
-- **Observation staleness:** The observation vector is assumed synchronous and instantaneous; real-time telemetry would introduce measurement latency.
+- Results are based on a simulated environment.
+- No real-world 5G deployment yet.
+- Latency and energy models are abstracted.
+- Static topology is currently limited to 2 edge nodes + 1 cloud node.
+- No systematic fault-injection campaign yet (node/link failures).
+
+This project focuses on the decision engine (MVP), not full network deployment.
 
 ---
 
@@ -205,7 +272,39 @@ The architecture is designed for progressive production onboarding:
 
 ## 8. Reproducibility
 
-### Quick start
+## ⚡ Quick Start
+
+### 1. Install dependencies
+
+```bash
+pip install -r requirements.txt
+```
+
+### 2. Train PPO model
+
+```bash
+python -m greenedge.rl.train --algo ppo --steps 500000
+```
+
+### 3. Run evaluation
+
+```bash
+python -m greenedge.rl.evaluate --episodes 200
+```
+
+### 4. Launch dashboard
+
+```bash
+streamlit run greenedge/dashboard/app.py
+```
+
+## ⚡ Quick Run (Recommended)
+
+```bash
+make all
+```
+
+### Full setup and reproducibility
 
 ```powershell
 git clone https://github.com/ZalOZKAN/greenedge-mvp.git
@@ -273,6 +372,12 @@ greenedge-mvp/
 ## CI/CD
 
 GitHub Actions pipeline: **Ruff lint** → **Pytest** → **Mypy type check** → **Docker Build** (on lint+test pass).
+
+---
+
+## 🧠 Key Takeaway
+
+GreenEdge-5G demonstrates that replacing static routing rules with learning-based decision systems can significantly improve stability in dynamic edge-cloud environments.
 
 ---
 
